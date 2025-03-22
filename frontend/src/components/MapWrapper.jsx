@@ -1,7 +1,28 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import { MapContainer, MapConsumer, TileLayer } from 'react-leaflet';
+import { MapContainer, useMap, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
+// Component to expose the map instance to the parent
+const MapController = ({ onMapReady, setMapRef }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (map) {
+      setMapRef(map);
+      onMapReady(true);
+      
+      // Apply any fixes needed for React strict mode
+      setTimeout(() => {
+        if (map && map.invalidateSize) {
+          map.invalidateSize();
+        }
+      }, 0);
+    }
+  }, [map, onMapReady, setMapRef]);
+  
+  return null;
+};
 
 /**
  * MapWrapper component ensures the map loads only in the browser.
@@ -27,6 +48,10 @@ const MapWrapper = forwardRef(({ center, zoom, children, className, style, id = 
       return mapRef.current;
     }
   }));
+
+  const setMapRefValue = (map) => {
+    mapRef.current = map;
+  };
 
   // Fix Leaflet's icon loading issues once when component mounts
   useEffect(() => {
@@ -84,36 +109,18 @@ const MapWrapper = forwardRef(({ center, zoom, children, className, style, id = 
         center={center}
         zoom={zoom}
         style={{ height: '100%', width: '100%' }}
-        whenCreated={(map) => {
-          console.log(`Map ${mapContainerId} created`);
-          mapRef.current = map;
-          setMapReady(true);
-          
-          // Apply any fixes needed for React strict mode
-          setTimeout(() => {
-            if (map && map.invalidateSize) {
-              map.invalidateSize();
-            }
-          }, 0);
-        }}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
-        {mapReady && (
-          <MapConsumer>
-            {(map) => {
-              // Store map reference if not already set
-              if (!mapRef.current) {
-                mapRef.current = map;
-              }
-              
-              // Only return children when map is ready
-              return children;
-            }}
-          </MapConsumer>
-        )}
+        
+        <MapController 
+          onMapReady={setMapReady} 
+          setMapRef={setMapRefValue} 
+        />
+        
+        {mapReady && children}
       </MapContainer>
     </div>
   );

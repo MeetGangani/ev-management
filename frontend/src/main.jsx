@@ -10,6 +10,7 @@ import {
 import './index.css';
 import store from './store';
 import { Provider } from 'react-redux';
+import { ThemeProvider } from './context/ThemeContext.jsx';
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen.jsx';
 import RegisterScreen from './screens/RegisterScreen.jsx';
@@ -75,7 +76,9 @@ const router = createBrowserRouter(
 ReactDOM.createRoot(document.getElementById('root')).render(
   <Provider store={store}>
     <React.StrictMode>
-      <RouterProvider router={router} />
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </React.StrictMode>
   </Provider>
 );
