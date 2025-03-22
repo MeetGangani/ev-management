@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Add these styles at the end of the file to fix Leaflet marker icon issues */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Fix marker icon display issues */
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  width: 25px !important;
+  height: 41px !important;
+}
+
+/* Fix popup styles */
+.leaflet-popup-content-wrapper {
+  border-radius: 4px;
+  padding: 0;
+}
+
+.leaflet-popup-content {
+  margin: 10px;
+  line-height: 1.4;
+}
+
+.leaflet-popup-tip-container {
+  margin-top: -1px;
+}
+
+/* Add smooth animation to marker movements */
+.leaflet-marker-icon {
+  transition: transform 0.3s ease-out;
+}
