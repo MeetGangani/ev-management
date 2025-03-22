@@ -35,6 +35,7 @@ const LiveLocationMap = ({
   const geofencePolygonRef = useRef(null);
   const boundaryPointsRef = useRef(null);
   const lastGeofenceStatus = useRef(null);
+  const [simulationMode, setSimulationMode] = useState(false);
   
   // Debug to check what data is actually coming from the backend
   useEffect(() => {
@@ -151,6 +152,34 @@ const LiveLocationMap = ({
           border: 1px solid #f5c6cb;
           box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
+        .simulation-button {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 1000;
+          padding: 8px 12px;
+          background-color: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-weight: bold;
+        }
+        .simulation-button.active {
+          background-color: #f44336;
+        }
+        .simulation-hint {
+          position: absolute;
+          top: 50px;
+          right: 10px;
+          z-index: 1000;
+          padding: 8px 12px;
+          background-color: rgba(255,255,255,0.8);
+          color: #333;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          font-size: 12px;
+        }
         @keyframes fadeInOut {
           0% { opacity: 0; }
           10% { opacity: 1; }
@@ -206,6 +235,124 @@ const LiveLocationMap = ({
     }, 5000);
   };
   
+  // Function to check if point is in geofence
+  const checkGeofence = (lat, lng) => {
+    // If in test mode and not in simulation mode, always return true
+    if (testMode && !simulationMode) {
+      return true;
+    }
+    
+    try {
+      const point = turf.point([lng, lat]); // [longitude, latitude] for turf
+      return turf.booleanPointInPolygon(point, geofencePolygon);
+    } catch (err) {
+      console.error('Error checking geofence:', err);
+      return false;
+    }
+  };
+  
+  // Function to update location (used by both real location tracking and simulation)
+  const updateLocation = (position) => {
+    if (!mapRef.current) return;
+    
+    const { latitude, longitude, accuracy } = position.coords;
+    
+    // Update user marker
+    if (!markerRef.current) {
+      const userIcon = L.divIcon({
+        className: 'user-marker-icon',
+        html: '<div style="width:16px;height:16px;"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+      });
+      
+      markerRef.current = L.marker([latitude, longitude], { icon: userIcon })
+        .addTo(mapRef.current)
+        .bindPopup('Your Location')
+        .openPopup();
+    } else {
+      markerRef.current.setLatLng([latitude, longitude]);
+    }
+    
+    // Update accuracy circle
+    if (!circleRef.current) {
+      circleRef.current = L.circle([latitude, longitude], {
+        radius: accuracy,
+        color: 'blue',
+        fillColor: 'blue',
+        fillOpacity: 0.1,
+        weight: 1
+      }).addTo(mapRef.current);
+    } else {
+      circleRef.current.setLatLng([latitude, longitude]).setRadius(accuracy);
+    }
+    
+    // Check if in geofence
+    const inGeofence = checkGeofence(latitude, longitude);
+    
+    // If geofence status changed, show appropriate alert
+    if (lastGeofenceStatus.current !== null && lastGeofenceStatus.current !== inGeofence) {
+      if (inGeofence) {
+        showGeofenceAlert('You have entered the parking zone');
+        toast.success('You have entered the station parking zone!');
+      } else {
+        showGeofenceAlert('Warning: You have left the parking zone');
+        toast.warning('You have left the station parking zone!');
+      }
+    }
+    
+    // Update current geofence status
+    lastGeofenceStatus.current = inGeofence;
+    
+    // Update state
+    const locationData = {
+      position: { lat: latitude, lng: longitude },
+      accuracy,
+      isInGeofence: inGeofence
+    };
+    
+    setUserLocation(locationData);
+    setIsInParkingZone(inGeofence);
+    
+    // Notify parent component
+    if (onLocationUpdate) {
+      onLocationUpdate(locationData);
+    }
+  };
+  
+  // Handle map click for simulation
+  const handleMapClick = (e) => {
+    if (!simulationMode || !mapRef.current) return;
+    
+    const { lat, lng } = e.latlng;
+    console.log(`Map clicked at: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    
+    // Create a fake position object that mimics the geolocation API
+    const fakePosition = {
+      coords: {
+        latitude: lat,
+        longitude: lng,
+        accuracy: 10
+      }
+    };
+    
+    // Update location using the same function as real location updates
+    updateLocation(fakePosition);
+    
+    // Show a popup at the clicked location
+    L.popup()
+      .setLatLng(e.latlng)
+      .setContent(`
+        <div>
+          <strong>Simulated Location:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}<br/>
+          <strong>Status:</strong> ${isInParkingZone ? 
+            '<span style="color:green">Inside geofence ✓</span>' : 
+            '<span style="color:red">Outside geofence ✗</span>'}
+        </div>
+      `)
+      .openOn(mapRef.current);
+  };
+  
   // Initialize map and location tracking
   useEffect(() => {
     // Ensure we only initialize once and when DOM is ready
@@ -226,6 +373,38 @@ const LiveLocationMap = ({
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
+        
+        // Add click handler for simulation mode
+        map.on('click', handleMapClick);
+        
+        // Add simulation control button
+        const simulationButton = document.createElement('button');
+        simulationButton.className = 'simulation-button';
+        simulationButton.innerText = 'Enable Simulation';
+        simulationButton.onclick = (e) => {
+          e.stopPropagation();
+          setSimulationMode(!simulationMode);
+          simulationButton.innerText = !simulationMode ? 'Disable Simulation' : 'Enable Simulation';
+          simulationButton.classList.toggle('active', !simulationMode);
+          
+          // Show or hide the hint
+          if (!simulationMode) {
+            // Show hint
+            if (!document.querySelector('.simulation-hint')) {
+              const hintDiv = document.createElement('div');
+              hintDiv.className = 'simulation-hint';
+              hintDiv.innerText = 'Click anywhere on the map to simulate your location';
+              map.getContainer().appendChild(hintDiv);
+            }
+          } else {
+            // Hide hint
+            const hint = document.querySelector('.simulation-hint');
+            if (hint && hint.parentNode) {
+              hint.parentNode.removeChild(hint);
+            }
+          }
+        };
+        map.getContainer().appendChild(simulationButton);
         
         // Add destination station marker and geofence polygon
         // Add destination marker with orange color
@@ -260,91 +439,8 @@ const LiveLocationMap = ({
         // Zoom to include the polygon
         map.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
         
-        // Function to check if point is in geofence
-        const checkGeofence = (lat, lng) => {
-          // If in test mode, always return true
-          if (testMode) {
-            return true;
-          }
-          
-          try {
-            const point = turf.point([lng, lat]); // [longitude, latitude] for turf
-            return turf.booleanPointInPolygon(point, geofencePolygon);
-          } catch (err) {
-            console.error('Error checking geofence:', err);
-            return false;
-          }
-        };
-        
-        // Setup location tracking
-        const updateLocation = (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          
-          // Update user marker
-          if (!markerRef.current) {
-            const userIcon = L.divIcon({
-              className: 'user-marker-icon',
-              html: '<div style="width:16px;height:16px;"></div>',
-              iconSize: [16, 16],
-              iconAnchor: [8, 8]
-            });
-            
-            markerRef.current = L.marker([latitude, longitude], { icon: userIcon })
-              .addTo(map)
-              .bindPopup('Your Location')
-              .openPopup();
-          } else {
-            markerRef.current.setLatLng([latitude, longitude]);
-          }
-          
-          // Update accuracy circle
-          if (!circleRef.current) {
-            circleRef.current = L.circle([latitude, longitude], {
-              radius: accuracy,
-              color: 'blue',
-              fillColor: 'blue',
-              fillOpacity: 0.1,
-              weight: 1
-            }).addTo(map);
-          } else {
-            circleRef.current.setLatLng([latitude, longitude]).setRadius(accuracy);
-          }
-          
-          // Check if in geofence
-          const inGeofence = checkGeofence(latitude, longitude);
-          
-          // If geofence status changed, show appropriate alert
-          if (lastGeofenceStatus.current !== null && lastGeofenceStatus.current !== inGeofence) {
-            if (inGeofence) {
-              showGeofenceAlert('You have entered the parking zone');
-              toast.success('You have entered the station parking zone!');
-            } else {
-              showGeofenceAlert('Warning: You have left the parking zone');
-              toast.warning('You have left the station parking zone!');
-            }
-          }
-          
-          // Update current geofence status
-          lastGeofenceStatus.current = inGeofence;
-          
-          // Update state
-          const locationData = {
-            position: { lat: latitude, lng: longitude },
-            accuracy,
-            isInGeofence: inGeofence
-          };
-          
-          setUserLocation(locationData);
-          setIsInParkingZone(inGeofence);
-          
-          // Notify parent component
-          if (onLocationUpdate) {
-            onLocationUpdate(locationData);
-          }
-        };
-        
-        // If in test mode, use simulated location
-        if (testMode) {
+        // If in test mode and not in simulation mode, use simulated location
+        if (testMode && !simulationMode) {
           const fakePosition = {
             coords: {
               latitude: simulatedLocation?.lat || geofenceCenter[0],
@@ -366,7 +462,7 @@ const LiveLocationMap = ({
               isInGeofence: true
             });
           }
-        } else if (watchPosition) {
+        } else if (watchPosition && !simulationMode) {
           // Watch real location
           if ('geolocation' in navigator) {
             // Get initial position
@@ -453,7 +549,33 @@ const LiveLocationMap = ({
       }
     }, 100);
     
-  }, [bookingData, stations, geofenceCenter, geofencePolygon, watchPosition, onLocationUpdate, testMode, simulatedLocation, isInParkingZone]);
+  }, [bookingData, stations, geofenceCenter, geofencePolygon, watchPosition, onLocationUpdate, testMode, simulatedLocation, simulationMode]);
+  
+  // Update simulation mode status when it changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    // Clear watches if going into simulation mode
+    if (simulationMode && watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+      console.log('Cleared geolocation watch for simulation mode');
+    }
+    
+    // If exiting simulation mode and watch position is enabled, restart watching
+    if (!simulationMode && watchPosition && !watchIdRef.current && 'geolocation' in navigator) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        updateLocation,
+        (error) => console.error('Error watching location:', error),
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+      console.log('Resumed geolocation watch after exiting simulation mode');
+    }
+  }, [simulationMode, watchPosition]);
   
   return (
     <div className="w-full h-full relative">
@@ -464,7 +586,7 @@ const LiveLocationMap = ({
       ></div>
       
       {/* Geofence indicator overlay */}
-      {watchPosition && userLocation && (
+      {(watchPosition || simulationMode) && userLocation && (
         <div className="absolute bottom-4 right-4 z-[1000] bg-white bg-opacity-80 p-3 rounded-lg shadow-md max-w-xs">
           <div className="font-medium text-sm">
             {isInParkingZone ? (
@@ -477,6 +599,9 @@ const LiveLocationMap = ({
                 <span className="inline-block w-3 h-3 bg-orange-500 rounded-full mr-2"></span>
                 Outside parking zone
               </div>
+            )}
+            {simulationMode && (
+              <div className="text-blue-700 text-xs mt-1">Simulation mode active</div>
             )}
           </div>
         </div>
