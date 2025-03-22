@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { FaUsersCog, FaMapMarkedAlt, FaCarAlt, FaUser, FaChartLine } from 'react-icons/fa';
+import { FaUsersCog, FaMapMarkedAlt, FaExclamationTriangle } from 'react-icons/fa';
 
 const AdminDashboardScreen = () => {
   const { userInfo } = useSelector((state) => state.auth);
@@ -18,12 +18,11 @@ const AdminDashboardScreen = () => {
       <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
       
       <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4 flex items-center">
-          <FaUser className="mr-2 text-blue-600" />
+        <h2 className="text-xl font-semibold mb-4">
           Welcome, {userInfo?.name}
         </h2>
         <p className="text-gray-600 mb-4">
-          You have admin access to manage the EV rental system. Use the cards below to navigate to different management sections.
+          You have admin access to manage the EV rental system.
         </p>
       </div>
 
@@ -61,21 +60,21 @@ const AdminDashboardScreen = () => {
             </Link>
           </div>
         </div>
-
-        {/* Analytics Card */}
+        
+        {/* Penalty Management Card */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-          <div className="p-5 bg-green-50">
-            <FaChartLine className="text-4xl text-green-600 mb-3" />
-            <h3 className="text-lg font-semibold mb-1">Analytics</h3>
+          <div className="p-5 bg-yellow-50">
+            <FaExclamationTriangle className="text-4xl text-yellow-600 mb-3" />
+            <h3 className="text-lg font-semibold mb-1">Penalty Management</h3>
             <p className="text-gray-600 text-sm mb-4">
-              View system statistics and booking analytics
+              Manage late returns and vehicle damage penalties
             </p>
-            <button
-              className="inline-block px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors opacity-50 cursor-not-allowed"
-              disabled
+            <Link 
+              to="/admin/penalties" 
+              className="inline-block px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors"
             >
-              Coming Soon
-            </button>
+              View Penalties
+            </Link>
           </div>
         </div>
       </div>

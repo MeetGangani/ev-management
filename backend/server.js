@@ -21,6 +21,16 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(cookieParser());
 
+// Middleware to handle double /api prefix
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/api/')) {
+    // Remove one /api/ prefix
+    req.url = req.url.replace('/api/api/', '/api/');
+    console.log(`Fixed double API prefix. New URL: ${req.url}`);
+  }
+  next();
+});
+
 app.use('/api/users', userRoutes);
 app.use('/api/stations', stationRoutes);
 app.use('/api/evs', evRoutes); 

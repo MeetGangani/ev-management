@@ -28,15 +28,99 @@ const bookingSchema = mongoose.Schema(
     },
     endTime: {
       type: Date,
+      required: true,
+    },
+    actualEndTime: {
+      type: Date,
+    },
+    duration: {
+      type: Number,
+      required: true,
+    },
+    totalCost: {
+      type: Number,
+      required: true,
+    },
+    paymentId: {
+      type: String,
     },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'ongoing', 'completed', 'cancelled', 'rejected'],
+      enum: ['pending', 'approved', 'declined', 'cancelled', 'ongoing', 'completed', 'penalized'],
       default: 'pending',
     },
-    fare: {
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'completed', 'failed', 'refunded'],
+      default: 'pending',
+    },
+    hasPenalty: {
+      type: Boolean,
+      default: false,
+    },
+    penaltyAmount: {
       type: Number,
       default: 0,
+    },
+    penaltyReason: {
+      type: String,
+    },
+    penaltyPaid: {
+      type: Boolean,
+      default: false,
+    },
+    damageReport: {
+      type: String,
+    },
+    damageImages: [
+      {
+        type: String,
+      }
+    ],
+    vehiclePhotosBeforeRide: [
+      {
+        type: String,
+      }
+    ],
+    vehiclePhotosAfterRide: [
+      {
+        type: String,
+      }
+    ],
+    geofenceData: {
+      startLocation: {
+        type: {
+          type: String,
+          enum: ['Point'],
+        },
+        coordinates: {
+          type: [Number],
+        }
+      },
+      endLocation: {
+        type: {
+          type: String,
+          enum: ['Point'],
+        },
+        coordinates: {
+          type: [Number],
+        }
+      },
+      wasWithinGeofence: {
+        type: Boolean,
+      }
+    },
+    lastKnownLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+      },
+      coordinates: {
+        type: [Number],
+      },
+      timestamp: {
+        type: Date
+      }
     },
     bookingType: {
       type: String,
@@ -69,15 +153,34 @@ const bookingSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    penaltyAmount: {
-      type: Number,
-      default: 0,
-    },
   },
   {
     timestamps: true,
   }
 );
+
+// Create a 2dsphere index on the lastKnownLocation field for geospatial queries
+bookingSchema.index({ 'lastKnownLocation': '2dsphere' });
+bookingSchema.index({ 'geofenceData.startLocation': '2dsphere' });
+bookingSchema.index({ 'geofenceData.endLocation': '2dsphere' });
+
+// Add virtual for late return status
+bookingSchema.virtual('isLateReturn').get(function() {
+  if (!this.actualEndTime || !this.endTime) {
+    return false;
+  }
+  
+  return this.actualEndTime > this.endTime;
+});
+
+// Add virtual for late minutes
+bookingSchema.virtual('lateMinutes').get(function() {
+  if (!this.isLateReturn) {
+    return 0;
+  }
+  
+  return Math.ceil((this.actualEndTime - this.endTime) / (1000 * 60));
+});
 
 const Booking = mongoose.model('Booking', bookingSchema);
 

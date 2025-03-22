@@ -131,6 +131,8 @@ const BookingScreen = () => {
         endStationId: ev.station._id, // Set end station same as start station for now
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
+        duration: duration, // Add duration field (in hours)
+        totalCost: totalPrice, // Add totalCost field
         bookingType: 'scheduled',
       };
       

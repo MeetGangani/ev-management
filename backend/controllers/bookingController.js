@@ -73,6 +73,8 @@ const createBooking = asyncHandler(async (req, res) => {
     endStationId: endStation._id,
     startTime: start,
     endTime: end,
+    duration: hours,
+    totalCost: fare,
     fare,
     bookingType: bookingType || 'scheduled'
   });
@@ -161,63 +163,121 @@ const getBookingById = asyncHandler(async (req, res) => {
 
 // @desc    Update booking status
 // @route   PUT /api/bookings/:id/status
-// @access  Private/StationMaster, Admin, and Customer (for their own bookings)
+// @access  Private/Admin/StationMaster/Customer
 const updateBookingStatus = asyncHandler(async (req, res) => {
-  const { status } = req.body;
-
-  if (!status) {
-    res.status(400);
-    throw new Error('Status is required');
-  }
-
-  const booking = await Booking.findById(req.params.id);
+  const booking = await Booking.findById(req.params.id)
+    .populate('evId', 'status')
+    .populate('customerId', 'name email');
 
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found');
   }
 
-  // Add authorization check - Allow customers to update their own bookings
-  const isCustomersOwnBooking = booking.customerId.toString() === req.user._id.toString();
-  const isStationMasterOrAdmin = req.user.role === 'stationMaster' || req.user.role === 'admin';
-  
-  // If not authorized, throw error
-  if (!isStationMasterOrAdmin && !isCustomersOwnBooking) {
-    res.status(403);
+  // Verify user authorization
+  if (req.user.role !== 'admin' && req.user.role !== 'stationMaster' &&
+      req.user._id.toString() !== booking.customerId._id.toString()) {
+    res.status(401);
     throw new Error('Not authorized to update this booking');
   }
-  
-  // Additional validation for customer-initiated updates
-  if (isCustomersOwnBooking && !isStationMasterOrAdmin) {
-    // Customers can only set status to 'ongoing' or 'completed'
-    if (!['ongoing', 'completed'].includes(status)) {
+
+  // Get the new status from request body
+  const { status, damageReport, penaltyAmount, penaltyReason } = req.body;
+
+  // Validate status transition
+  if (!['approved', 'declined', 'cancelled', 'ongoing', 'completed', 'penalized'].includes(status)) {
+    res.status(400);
+    throw new Error('Invalid status');
+  }
+
+  // Special validations based on user role and status transitions
+  if (req.user.role === 'customer') {
+    // Customers can only cancel pending bookings or start/complete their rides
+    if ((booking.status === 'pending' && status !== 'cancelled') &&
+        (booking.status === 'approved' && status !== 'ongoing') &&
+        (booking.status === 'ongoing' && status !== 'completed')) {
       res.status(400);
-      throw new Error('Customers can only start or complete their rides');
-    }
-    
-    // Can only set to 'ongoing' if current status is 'approved'
-    if (status === 'ongoing' && booking.status !== 'approved') {
-      res.status(400);
-      throw new Error('Booking must be approved before starting the ride');
-    }
-    
-    // Can only set to 'completed' if current status is 'ongoing'
-    if (status === 'completed' && booking.status !== 'ongoing') {
-      res.status(400);
-      throw new Error('Ride must be ongoing before it can be completed');
+      throw new Error('You are not authorized to change to this status');
     }
   }
 
-  booking.status = status;
+  // Calculate lateness if completing a ride
+  let lateReturnMinutes = 0;
+  let calculatedPenaltyAmount = 0;
+  let latePenaltyReason = '';
 
-  // Update the EV status based on booking status
+  if (status === 'completed' && booking.status === 'ongoing') {
+    const endTime = new Date(booking.endTime);
+    const now = new Date();
+    
+    // Check if return is late
+    if (now > endTime) {
+      lateReturnMinutes = Math.ceil((now - endTime) / (1000 * 60));
+      
+      // Calculate penalty - $1 per minute late, for example
+      calculatedPenaltyAmount = Math.min(lateReturnMinutes, 120); // Cap at $120
+      
+      if (lateReturnMinutes > 0) {
+        latePenaltyReason = `Late return by ${lateReturnMinutes} minutes`;
+      }
+    }
+  }
+
+  // Update booking with new status
+  booking.status = status;
+  
+  // Apply penalties if applicable
+  if (status === 'penalized' || calculatedPenaltyAmount > 0) {
+    booking.hasPenalty = true;
+    booking.penaltyAmount = penaltyAmount || calculatedPenaltyAmount;
+    booking.penaltyReason = penaltyReason || latePenaltyReason;
+  }
+  
+  // Add damage report if provided
+  if (damageReport) {
+    booking.damageReport = damageReport;
+    booking.hasPenalty = true;
+    
+    // If no explicit penalty amount is set, default to a minimum
+    if (!booking.penaltyAmount) {
+      booking.penaltyAmount = 50; // Default penalty for damage report
+    }
+    
+    // Add to penalty reason
+    if (booking.penaltyReason) {
+      booking.penaltyReason += '; ' + damageReport;
+    } else {
+      booking.penaltyReason = damageReport;
+    }
+  }
+
+  // If status is 'ongoing', update the startTime to now
   if (status === 'ongoing') {
+    booking.startTime = new Date();
+    
+    // Update the EV status
     const ev = await EV.findById(booking.evId);
     if (ev) {
       ev.status = 'in-use';
       await ev.save();
     }
-  } else if (status === 'completed') {
+  }
+
+  // If status is 'completed', update the actualEndTime to now
+  if (status === 'completed') {
+    booking.actualEndTime = new Date();
+    
+    // Calculate total cost if needed (based on actual usage time)
+    if (!booking.totalCost) {
+      const ev = await EV.findById(booking.evId);
+      const startTime = new Date(booking.startTime);
+      const endTime = new Date();
+      const durationHours = (endTime - startTime) / (1000 * 60 * 60);
+      
+      booking.totalCost = Math.ceil(durationHours * ev.pricePerHour);
+    }
+    
+    // Update the EV status back to available
     const ev = await EV.findById(booking.evId);
     if (ev) {
       ev.status = 'available';
@@ -226,7 +286,11 @@ const updateBookingStatus = asyncHandler(async (req, res) => {
   }
 
   const updatedBooking = await booking.save();
-  res.json(updatedBooking);
+
+  // Send notification if needed
+  // ... (existing notification code)
+
+  res.status(200).json(updatedBooking);
 });
 
 // @desc    Cancel booking
@@ -268,11 +332,199 @@ const cancelBooking = asyncHandler(async (req, res) => {
   res.json(updatedBooking);
 });
 
+// @desc    Report damage for a booking
+// @route   POST /api/bookings/:id/damage-report
+// @access  Private/Admin/StationMaster
+const reportDamage = asyncHandler(async (req, res) => {
+  const booking = await Booking.findById(req.params.id)
+    .populate('customerId', 'name email')
+    .populate('evId', 'manufacturer model registrationNumber');
+
+  if (!booking) {
+    res.status(404);
+    throw new Error('Booking not found');
+  }
+
+  // Only admins and station masters can report damage
+  if (req.user.role !== 'admin' && req.user.role !== 'stationMaster') {
+    res.status(401);
+    throw new Error('Not authorized to report damage');
+  }
+
+  const { damageDescription, penaltyAmount, images } = req.body;
+
+  if (!damageDescription) {
+    res.status(400);
+    throw new Error('Damage description is required');
+  }
+
+  booking.damageReport = damageDescription;
+  booking.hasPenalty = true;
+  booking.penaltyAmount = penaltyAmount || 50; // Default penalty amount
+  booking.penaltyReason = `Vehicle damage: ${damageDescription}`;
+  
+  if (images && images.length > 0) {
+    booking.damageImages = images;
+  }
+
+  // Change status to penalized
+  booking.status = 'penalized';
+
+  const updatedBooking = await booking.save();
+
+  // Send notification to customer
+  // ... (implement notification logic)
+
+  res.status(200).json(updatedBooking);
+});
+
+// @desc    Get penalty statistics
+// @route   GET /api/bookings/penalty-stats
+// @access  Private/Admin
+const getPenaltyStatistics = asyncHandler(async (req, res) => {
+  if (req.user.role !== 'admin') {
+    res.status(401);
+    throw new Error('Not authorized to access penalty statistics');
+  }
+
+  // Get penalty statistics
+  const totalPenalizedBookings = await Booking.countDocuments({ hasPenalty: true });
+  const totalPenaltyAmount = await Booking.aggregate([
+    { $match: { hasPenalty: true } },
+    { $group: { _id: null, total: { $sum: "$penaltyAmount" } } }
+  ]);
+  
+  // Get penalty types breakdown
+  const lateReturnCount = await Booking.countDocuments({
+    penaltyReason: { $regex: /late return/i }
+  });
+  
+  const damageCount = await Booking.countDocuments({
+    damageReport: { $exists: true, $ne: "" }
+  });
+  
+  const otherPenaltyCount = totalPenalizedBookings - (lateReturnCount + damageCount);
+
+  res.status(200).json({
+    totalPenalizedBookings,
+    totalPenaltyAmount: totalPenaltyAmount.length > 0 ? totalPenaltyAmount[0].total : 0,
+    penaltyBreakdown: {
+      lateReturn: lateReturnCount,
+      damage: damageCount,
+      other: otherPenaltyCount
+    }
+  });
+});
+
+// @desc    Update booking location
+// @route   PUT /api/bookings/:id/location
+// @access  Private/Customer
+const updateBookingLocation = asyncHandler(async (req, res) => {
+  const booking = await Booking.findById(req.params.id)
+    .populate('customerId')
+    .populate('startStationId')
+    .populate('evId');
+
+  if (!booking) {
+    res.status(404);
+    throw new Error('Booking not found');
+  }
+
+  // Only the customer who owns the booking can update its location
+  if (req.user._id.toString() !== booking.customerId._id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to update this booking');
+  }
+
+  // Only allow location updates for ongoing bookings
+  if (booking.status !== 'ongoing') {
+    res.status(400);
+    throw new Error('Location can only be updated for ongoing bookings');
+  }
+
+  const { location } = req.body;
+
+  if (!location || !location.latitude || !location.longitude) {
+    res.status(400);
+    throw new Error('Location data is required (latitude, longitude)');
+  }
+
+  // Create Point geometry
+  const point = {
+    type: 'Point',
+    coordinates: [parseFloat(location.longitude), parseFloat(location.latitude)],
+  };
+
+  // Add timestamp to the location
+  const locationWithTimestamp = {
+    ...point,
+    timestamp: new Date(),
+  };
+
+  // Update the booking's last known location
+  booking.lastKnownLocation = locationWithTimestamp;
+
+  // Check if within geofence (station radius)
+  const stationLng = booking.startStationId.location.coordinates[0];
+  const stationLat = booking.startStationId.location.coordinates[1];
+  const stationRadius = booking.startStationId.radius || 100; // default to 100m if not specified
+
+  // Calculate distance between current location and station
+  const distanceToStation = calculateDistance(
+    location.latitude,
+    location.longitude,
+    stationLat,
+    stationLng
+  );
+
+  // Determine if within geofence
+  const isWithinGeofence = distanceToStation <= stationRadius;
+
+  // If this is the first location update for an ongoing booking, set start location
+  if (booking.status === 'ongoing' && !booking.geofenceData?.startLocation) {
+    booking.geofenceData = {
+      ...booking.geofenceData,
+      startLocation: point,
+    };
+  }
+
+  const updatedBooking = await booking.save();
+
+  res.status(200).json({
+    bookingId: updatedBooking._id,
+    lastKnownLocation: updatedBooking.lastKnownLocation,
+    isWithinGeofence,
+    distance: distanceToStation,
+    stationRadius
+  });
+});
+
+// Helper function to calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c; // Distance in km
+  return d * 1000; // Convert to meters
+}
+
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
 export {
   createBooking,
   getBookings,
-  getMyBookings,
   getBookingById,
+  getMyBookings,
   updateBookingStatus,
+  reportDamage,
+  getPenaltyStatistics,
+  updateBookingLocation,
   cancelBooking
 }; 

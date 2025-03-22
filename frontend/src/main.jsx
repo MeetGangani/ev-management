@@ -30,6 +30,7 @@ import AdminRoute from './components/AdminRoute.jsx';
 import StationMasterRoute from './components/StationMasterRoute.jsx';
 import VerifiedCustomerRoute from './components/VerifiedCustomerRoute.jsx';
 import EditStationScreen from './screens/EditStationScreen.jsx';
+import PenaltyDashboardScreen from './screens/PenaltyDashboardScreen.jsx';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -56,6 +57,7 @@ const router = createBrowserRouter(
           <Route path='stations' element={<AdminStationsScreen />} />
           <Route path='stations/:stationId/edit' element={<EditStationScreen />} />
           <Route path='stations/:stationId/evs' element={<AdminStationEVsScreen />} />
+          <Route path='penalties' element={<PenaltyDashboardScreen />} />
         </Route>
         
         {/* Station Master Routes */}

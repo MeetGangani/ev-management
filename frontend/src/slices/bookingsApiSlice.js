@@ -18,7 +18,7 @@ export const bookingsApiSlice = apiSlice.injectEndpoints({
     }),
     getMyBookings: builder.query({
       query: () => ({
-        url: `${BOOKINGS_URL}/my`,
+        url: `${BOOKINGS_URL}/my-bookings`,
       }),
       keepUnusedDataFor: 5,
       providesTags: ['Booking'],
@@ -41,12 +41,12 @@ export const bookingsApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ['Booking', 'EV'],
     }),
     updateBookingStatus: builder.mutation({
-      query: ({ id, status }) => ({
+      query: ({ id, status, damageReport, penaltyAmount, penaltyReason }) => ({
         url: `${BOOKINGS_URL}/${id}/status`,
         method: 'PUT',
-        body: { status },
+        body: { status, damageReport, penaltyAmount, penaltyReason },
       }),
-      invalidatesTags: ['Booking', 'EV'],
+      invalidatesTags: ['Booking'],
     }),
     cancelBooking: builder.mutation({
       query: (id) => ({
@@ -54,6 +54,21 @@ export const bookingsApiSlice = apiSlice.injectEndpoints({
         method: 'PUT',
       }),
       invalidatesTags: ['Booking', 'EV'],
+    }),
+    reportDamage: builder.mutation({
+      query: ({ id, damageDescription, penaltyAmount, images }) => ({
+        url: `${BOOKINGS_URL}/${id}/damage-report`,
+        method: 'POST',
+        body: { damageDescription, penaltyAmount, images },
+      }),
+      invalidatesTags: ['Booking'],
+    }),
+    updateUserLocation: builder.mutation({
+      query: ({ bookingId, location }) => ({
+        url: `${BOOKINGS_URL}/${bookingId}/location`,
+        method: 'PUT',
+        body: { location },
+      }),
     }),
   }),
 });
@@ -65,4 +80,6 @@ export const {
   useCreateBookingMutation,
   useUpdateBookingStatusMutation,
   useCancelBookingMutation,
+  useReportDamageMutation,
+  useUpdateUserLocationMutation,
 } = bookingsApiSlice; 
