@@ -19,7 +19,7 @@ const ActiveRideScreen = () => {
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [isInParkingZone, setIsInParkingZone] = useState(false);
   const [userLocationData, setUserLocationData] = useState(null);
-  const [mapKey, setMapKey] = useState(Date.now().toString());
+  const [mapKey, setMapKey] = useState('stable-map-key');
   const [mapError, setMapError] = useState(false);
   const [nearestStation, setNearestStation] = useState(null);
   const [showDestinationSelector, setShowDestinationSelector] = useState(false);
@@ -253,51 +253,30 @@ const ActiveRideScreen = () => {
         </MessageAlert>
       ) : (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {/* Map section */}
-          <div className="h-[50vh] w-full relative">
-            {mapError ? (
-              <div className="h-full w-full flex items-center justify-center bg-gray-100">
-                <div className="text-center p-4">
-                  <p className="text-red-600 mb-2">Map failed to load</p>
-                  <button 
-                    onClick={() => {
-                      setMapKey(Date.now().toString());
-                      setMapError(false);
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    Retry
-                  </button>
-                </div>
-              </div>
-            ) : booking && (
+          {/* Map with user location */}
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-2">Live Location</h2>
+            <div className="rounded-lg overflow-hidden shadow-md h-96">
               <ErrorBoundary onError={() => setMapError(true)}>
-                <LiveLocationMap 
-                  key={`ride-map-${mapKey}`}
-                  bookingData={booking} 
-                  stations={allStations || []}
-                  height="100%"
-                  watchPosition={booking.status === 'ongoing'}
-                  onLocationUpdate={handleLocationUpdate}
-                  testMode={testMode}
-                  simulatedLocation={simulatedLocation}
-                />
+                {booking ? (
+                  <LiveLocationMap 
+                    key={`map-${testMode ? 'test' : 'normal'}`}
+                    bookingData={booking} 
+                    stations={allStations || []} 
+                    height="100%" 
+                    watchPosition={booking?.status === 'ongoing'}
+                    onLocationUpdate={handleLocationUpdate}
+                    testMode={testMode}
+                    simulatedLocation={simulatedLocation}
+                    onPenalty={refetch}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full bg-gray-100">
+                    <p className="text-gray-500">Loading map data...</p>
+                  </div>
+                )}
               </ErrorBoundary>
-            )}
-            
-            {booking && booking.status === 'ongoing' && (
-              <div className="absolute top-4 left-4 right-4 bg-white bg-opacity-90 p-3 rounded-lg shadow-md">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center text-blue-800">
-                    <FaClock className="mr-2" />
-                    <span className="font-mono font-bold">{formatElapsedTime(elapsedTime)}</span>
-                  </div>
-                  <div className="text-green-700 font-medium">
-                    {getRemainingTime()}
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
           
           {/* Ride information section */}
