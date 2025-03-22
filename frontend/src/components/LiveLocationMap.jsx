@@ -22,7 +22,8 @@ const LiveLocationMap = ({
   watchPosition = false,
   onLocationUpdate = null,
   testMode = false,
-  simulatedLocation = null
+  simulatedLocation = null,
+  onPenalty = null
 }) => {
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -36,6 +37,13 @@ const LiveLocationMap = ({
   const boundaryPointsRef = useRef(null);
   const lastGeofenceStatus = useRef(null);
   const [simulationMode, setSimulationMode] = useState(false);
+  
+  // State for penalty tracking
+  const [geofenceViolation, setGeofenceViolation] = useState(false);
+  const geofenceViolationStartTime = useRef(null);
+  const lastPenaltyTime = useRef(null);
+  const geofenceViolationDistance = useRef(0);
+  const penaltyCooldown = useRef(false);
   
   // Debug to check what data is actually coming from the backend
   useEffect(() => {
@@ -235,7 +243,7 @@ const LiveLocationMap = ({
     }, 5000);
   };
   
-  // Function to check if point is in geofence
+  // Function to check if point is in geofence and handle violations
   const checkGeofence = (lat, lng) => {
     // If in test mode and not in simulation mode, always return true
     if (testMode && !simulationMode) {
@@ -244,11 +252,108 @@ const LiveLocationMap = ({
     
     try {
       const point = turf.point([lng, lat]); // [longitude, latitude] for turf
-      return turf.booleanPointInPolygon(point, geofencePolygon);
+      const isInside = turf.booleanPointInPolygon(point, geofencePolygon);
+      
+      // Handle geofence violation penalties
+      if (!isInside) {
+        // Calculate distance from geofence
+        const distance = calculateDistanceFromGeofence(lat, lng);
+        geofenceViolationDistance.current = Math.max(geofenceViolationDistance.current, distance);
+        
+        // If this is a new violation, record the start time
+        if (!geofenceViolation) {
+          setGeofenceViolation(true);
+          geofenceViolationStartTime.current = new Date();
+        }
+        
+        // Apply penalty after being outside for more than 1 minute
+        // but only if we haven't already applied one recently (cooldown)
+        const now = new Date();
+        if (
+          geofenceViolationStartTime.current && 
+          !penaltyCooldown.current &&
+          (now - geofenceViolationStartTime.current) > 60000 // 1 minute
+        ) {
+          // Apply penalty
+          applyGeofenceViolationPenalty(lat, lng, distance);
+          
+          // Set cooldown to avoid spamming penalties
+          penaltyCooldown.current = true;
+          lastPenaltyTime.current = now;
+          
+          // Reset cooldown after 5 minutes
+          setTimeout(() => {
+            penaltyCooldown.current = false;
+          }, 5 * 60 * 1000); // 5 minutes
+        }
+      } else {
+        // Reset violation tracking if we're back inside
+        if (geofenceViolation) {
+          setGeofenceViolation(false);
+          geofenceViolationStartTime.current = null;
+          geofenceViolationDistance.current = 0;
+        }
+      }
+      
+      return isInside;
     } catch (err) {
       console.error('Error checking geofence:', err);
       return false;
     }
+  };
+  
+  // Calculate distance from geofence boundary
+  const calculateDistanceFromGeofence = (lat, lng) => {
+    if (!boundaryPointsRef.current) return 0;
+    
+    try {
+      const point = turf.point([lng, lat]);
+      
+      // Create a LineString from the boundary points
+      const boundaryLine = turf.lineString(
+        boundaryPointsRef.current.map(coord => [coord[1], coord[0]])
+      );
+      
+      // Calculate the distance to the boundary
+      const distance = turf.pointToLineDistance(point, boundaryLine, { units: 'meters' });
+      return Math.round(distance);
+    } catch (err) {
+      console.error('Error calculating distance from geofence:', err);
+      return 0;
+    }
+  };
+  
+  // Apply geofence violation penalty
+  const applyGeofenceViolationPenalty = (lat, lng, distance) => {
+    // Don't apply penalties in test or simulation mode
+    if (testMode || simulationMode) return;
+    
+    if (!onPenalty) {
+      // Just show toast notification if no penalty handler
+      toast.error(`Penalty applied: Outside allowed zone for extended period (${distance}m)`);
+      return;
+    }
+    
+    // Calculate duration in minutes
+    const durationMs = new Date() - geofenceViolationStartTime.current;
+    const durationMinutes = Math.round(durationMs / 60000);
+    
+    // Call parent penalty handler
+    onPenalty({
+      type: 'GEOFENCE_VIOLATION',
+      details: {
+        location: { lat, lng },
+        distanceOutsideZone: distance,
+        durationInMinutes: durationMinutes,
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+    // Show toast notification
+    toast.error(`Penalty applied: Outside allowed zone for ${durationMinutes} minutes (${distance}m)`);
+    
+    // Also show an alert on the map
+    showGeofenceAlert(`Penalty applied: Outside allowed zone for ${durationMinutes} minutes (${distance}m)`);
   };
   
   // Function to update location (used by both real location tracking and simulation)
@@ -287,7 +392,7 @@ const LiveLocationMap = ({
       circleRef.current.setLatLng([latitude, longitude]).setRadius(accuracy);
     }
     
-    // Check if in geofence
+    // Check if in geofence with enhanced violation handling
     const inGeofence = checkGeofence(latitude, longitude);
     
     // If geofence status changed, show appropriate alert
@@ -308,13 +413,18 @@ const LiveLocationMap = ({
     const locationData = {
       position: { lat: latitude, lng: longitude },
       accuracy,
-      isInGeofence: inGeofence
+      isInGeofence: inGeofence,
+      isViolatingGeofence: geofenceViolation,
+      violationDuration: geofenceViolationStartTime.current 
+        ? Math.round((new Date() - geofenceViolationStartTime.current) / 1000) 
+        : 0,
+      distanceFromGeofence: !inGeofence ? calculateDistanceFromGeofence(latitude, longitude) : 0
     };
     
     setUserLocation(locationData);
     setIsInParkingZone(inGeofence);
     
-    // Notify parent component
+    // Notify parent component with enhanced data
     if (onLocationUpdate) {
       onLocationUpdate(locationData);
     }
@@ -526,7 +636,7 @@ const LiveLocationMap = ({
                     <h3 style="font-weight:bold">${station.name}</h3>
                     <p>${station.address}</p>
                     <p>Operating Hours: ${station.operatingHours?.opening || 'N/A'} - ${station.operatingHours?.closing || 'N/A'}</p>
-                  </div>
+      </div>
                 `);
             }
           });
@@ -585,7 +695,7 @@ const LiveLocationMap = ({
         className="leaflet-container"
       ></div>
       
-      {/* Geofence indicator overlay */}
+      {/* Geofence indicator overlay with enhanced violation info */}
       {(watchPosition || simulationMode) && userLocation && (
         <div className="absolute bottom-4 right-4 z-[1000] bg-white bg-opacity-80 p-3 rounded-lg shadow-md max-w-xs">
           <div className="font-medium text-sm">
@@ -600,6 +710,29 @@ const LiveLocationMap = ({
                 Outside parking zone
               </div>
             )}
+            
+            {geofenceViolation && (
+              <div className="text-red-700 text-xs mt-1 font-bold">
+                Geofence violation detected!
+                {geofenceViolationStartTime.current && (
+                  <div>
+                    Duration: {Math.round((new Date() - geofenceViolationStartTime.current) / 1000)}s
+                  </div>
+                )}
+                {geofenceViolationDistance.current > 0 && (
+                  <div>
+                    Distance: {geofenceViolationDistance.current}m outside
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {penaltyCooldown.current && (
+              <div className="text-red-700 text-xs mt-1">
+                Penalty applied
+              </div>
+            )}
+            
             {simulationMode && (
               <div className="text-blue-700 text-xs mt-1">Simulation mode active</div>
             )}

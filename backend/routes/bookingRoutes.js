@@ -9,6 +9,9 @@ import {
   getPenaltyStatistics,
   updateBookingLocation,
   cancelBooking,
+  completeBooking,
+  applyPenaltyToBooking,
+  searchBookings
 } from '../controllers/bookingController.js';
 import { protect, admin, adminOrStationMaster, verifiedCustomer } from '../middleware/authMiddleware.js';
 
@@ -35,5 +38,8 @@ router.route('/:id/cancel')
 router.route('/:id/damage-report').post(protect, adminOrStationMaster, reportDamage);
 
 router.route('/:id/location').put(protect, updateBookingLocation);
+
+router.post('/search', protect, searchBookings);
+router.post('/:id/apply-penalty', protect, applyPenaltyToBooking);
 
 export default router; 
