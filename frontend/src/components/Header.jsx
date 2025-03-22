@@ -1,4 +1,4 @@
-import { FaSignInAlt, FaSignOutAlt, FaUser, FaIdCard, FaUserCog, FaCheckCircle, FaChevronDown, FaCalendarAlt } from 'react-icons/fa';
+import { FaSignInAlt, FaSignOutAlt, FaUser, FaIdCard, FaUserCog, FaCheckCircle, FaChevronDown, FaCalendarAlt, FaTachometerAlt } from 'react-icons/fa';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { useLogoutMutation } from '../slices/usersApiSlice';
@@ -87,14 +87,24 @@ const Header = () => {
                         Profile
                       </Link>
                       {userInfo.role === 'customer' && (
-                        <Link
-                          to="/my-bookings"
-                          className="block px-4 py-2 text-gray-800 hover:bg-gray-100"
-                          onClick={() => setShowDropdown(false)}
-                        >
-                          <FaCalendarAlt className="inline mr-2" />
-                          My Bookings
-                        </Link>
+                        <>
+                          <Link
+                            to="/dashboard"
+                            className="block px-4 py-2 text-gray-800 hover:bg-gray-100"
+                            onClick={() => setShowDropdown(false)}
+                          >
+                            <FaTachometerAlt className="inline mr-2" />
+                            Dashboard
+                          </Link>
+                          <Link
+                            to="/my-bookings"
+                            className="block px-4 py-2 text-gray-800 hover:bg-gray-100"
+                            onClick={() => setShowDropdown(false)}
+                          >
+                            <FaCalendarAlt className="inline mr-2" />
+                            My Bookings
+                          </Link>
+                        </>
                       )}
                       {userInfo.role === 'admin' && (
                         <Link
@@ -184,6 +194,14 @@ const Header = () => {
                   </Link>
                   {userInfo.role === 'customer' && (
                     <>
+                      <Link
+                        to="/dashboard"
+                        className="block px-3 py-2 rounded-md text-gray-800 hover:bg-gray-200"
+                        onClick={() => setIsOpen(false)}
+                      >
+                        <FaTachometerAlt className="inline mr-2" />
+                        Dashboard
+                      </Link>
                       <Link
                         to="/stations"
                         className="block px-3 py-2 rounded-md text-gray-800 hover:bg-gray-200"

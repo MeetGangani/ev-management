@@ -25,6 +25,7 @@ import StationMastersScreen from './screens/StationMastersScreen.jsx';
 import StationMasterDashboardScreen from './screens/StationMasterDashboardScreen.jsx';
 import StationBookingsScreen from './screens/StationBookingsScreen.jsx';
 import ActiveRideScreen from './screens/ActiveRideScreen.jsx';
+import CustomerDashboardScreen from './screens/CustomerDashboardScreen.jsx';
 import PrivateRoute from './components/PrivateRoute.jsx';
 import AdminRoute from './components/AdminRoute.jsx';
 import StationMasterRoute from './components/StationMasterRoute.jsx';
@@ -49,6 +50,7 @@ const router = createBrowserRouter(
         <Route path='/profile' element={<ProfileScreen />} />
         <Route path='/my-bookings' element={<MyBookingsScreen />} />
         <Route path='/ride/:bookingId' element={<ActiveRideScreen />} />
+        <Route path='/dashboard' element={<CustomerDashboardScreen />} />
         
         {/* Admin Routes */}
         <Route path='/admin' element={<AdminRoute />}>

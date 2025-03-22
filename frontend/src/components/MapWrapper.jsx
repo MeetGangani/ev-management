@@ -1,115 +1,122 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { MapContainer, MapConsumer, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 /**
  * MapWrapper component ensures the map loads only in the browser.
- * This prevents SSR issues with Leaflet which requires a browser environment.
- * Uses a more direct approach to handle React StrictMode remounting.
+ * This provides a simplified wrapper around react-leaflet's MapContainer that works better
+ * with React's StrictMode and handles leaflet properly.
  */
-const MapWrapper = ({ center, zoom, children, className, style, id = 'map' }) => {
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
+const MapWrapper = forwardRef(({ center, zoom, children, className, style, id = 'map' }, ref) => {
+  const [isClient, setIsClient] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const mapRef = useRef(null);
   const mapContainerId = `map-container-${id}`;
+  const containerRef = useRef(null);
+  const [mapKey] = useState(`leaflet-${id}-${Date.now()}`);
 
-  // Initialize the map when the component mounts
+  // Expose the map instance through the ref
+  useImperativeHandle(ref, () => ({
+    setView(center, zoom) {
+      if (mapRef.current) {
+        mapRef.current.setView(center, zoom);
+      }
+    },
+    getMap() {
+      return mapRef.current;
+    }
+  }));
+
+  // Fix Leaflet's icon loading issues once when component mounts
   useEffect(() => {
-    // Make sure we're in the browser environment
-    if (typeof window === 'undefined' || !mapContainerRef.current) {
-      return;
-    }
-
-    // Prevent re-initialization if map instance already exists
-    if (mapInstanceRef.current) {
-      console.log(`Map ${mapContainerId} already exists, skipping initialization`);
-      setMapReady(true);
-      return;
-    }
-
-    // Fix Leaflet's icon loading issues
     delete L.Icon.Default.prototype._getIconUrl;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
       iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
       shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
     });
+    
+    // Set client-side rendering flag
+    setIsClient(true);
 
-    // Check if this container already has a map
-    const container = mapContainerRef.current;
-    if (container._leaflet_id) {
-      console.log(`Container ${mapContainerId} already has a map, reusing`);
-      return;
-    }
-
-    try {
-      console.log(`Creating map ${mapContainerId}`);
-      // Create new map instance
-      const mapInstance = L.map(container, {
-        center: center,
-        zoom: zoom,
-      });
-
-      // Add OpenStreetMap tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(mapInstance);
-
-      // Store the map instance
-      mapInstanceRef.current = mapInstance;
-      setMapReady(true);
-      console.log(`Map ${mapContainerId} created successfully`);
-    } catch (e) {
-      console.error('Error creating map:', e);
-    }
-
-    // Cleanup function
+    // Cleanup any existing map with this ID when component unmounts
     return () => {
-      if (mapInstanceRef.current) {
+      if (mapRef.current) {
+        console.log(`Cleaning up map ${mapContainerId}`);
         try {
-          console.log(`Removing map ${mapContainerId}`);
-          mapInstanceRef.current.remove();
-          mapInstanceRef.current = null;
+          // Attempt to properly remove the map
+          mapRef.current.remove();
+          mapRef.current = null;
         } catch (e) {
-          console.error('Error removing map:', e);
+          console.error('Error cleaning up map:', e);
         }
       }
     };
-  }, [center, zoom, mapContainerId]);
+  }, [mapContainerId]);
 
-  // Since we cannot use react-leaflet components directly with our custom map instance,
-  // we need to implement a different approach for showing child components
-  useEffect(() => {
-    // Only run this effect if the map is ready and we have children to show
-    if (!mapReady || !mapInstanceRef.current || !children) return;
-
-    const map = mapInstanceRef.current;
-    
-    // We could implement custom marker logic here
-    // For example:
-    // if (userLocation) {
-    //   L.marker([userLocation.lat, userLocation.lng]).addTo(map);
-    // }
-    
-    // For now, just make sure the map is rendered correctly
-    map.invalidateSize();
-    
-  }, [mapReady, children]);
+  // Wait until we're on the client side to render the map
+  if (!isClient) {
+    return (
+      <div
+        id={mapContainerId}
+        ref={containerRef}
+        style={{ ...style, position: 'relative' }}
+        className={className}
+      >
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+          Loading map...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       id={mapContainerId}
-      ref={mapContainerRef}
+      ref={containerRef}
       style={{ ...style, position: 'relative' }}
       className={className}
+      key={mapKey}
     >
-      {!mapReady && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-          Loading map...
-        </div>
-      )}
+      <MapContainer
+        key={mapKey}
+        center={center}
+        zoom={zoom}
+        style={{ height: '100%', width: '100%' }}
+        whenCreated={(map) => {
+          console.log(`Map ${mapContainerId} created`);
+          mapRef.current = map;
+          setMapReady(true);
+          
+          // Apply any fixes needed for React strict mode
+          setTimeout(() => {
+            if (map && map.invalidateSize) {
+              map.invalidateSize();
+            }
+          }, 0);
+        }}
+      >
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        />
+        {mapReady && (
+          <MapConsumer>
+            {(map) => {
+              // Store map reference if not already set
+              if (!mapRef.current) {
+                mapRef.current = map;
+              }
+              
+              // Only return children when map is ready
+              return children;
+            }}
+          </MapConsumer>
+        )}
+      </MapContainer>
     </div>
   );
-};
+});
 
 export default MapWrapper; 
