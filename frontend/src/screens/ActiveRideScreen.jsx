@@ -88,25 +88,24 @@ const ActiveRideScreen = () => {
   
   // When test mode is toggled, setup simulated location data
   useEffect(() => {
-    if (testMode && booking?.endStationId) {
-      // In test mode, simulate being at the destination station with high accuracy
-      const destination = booking.endStationId;
-      const stationLat = destination.coordinates?.lat || destination.geofenceParameters?.coordinates[1];
-      const stationLng = destination.coordinates?.lng || destination.geofenceParameters?.coordinates[0];
+    if (testMode) {
+      // Force to set user as in the parking zone
+      setIsInParkingZone(true);
       
+      // Create simulated location at destination
       setSimulatedLocation({
-        lat: stationLat,
-        lng: stationLng,
+        lat: 23.11,
+        lng: 72.62,
         accuracy: 5, // 5 meters accuracy
-        forceInGeofence: true // Force location to be considered inside geofence
+        forceInGeofence: true
       });
       
       // Toast notification about test mode
-      toast.info('Test mode enabled: Location simulated at destination station');
+      toast.info('Test mode enabled: You can now complete the ride from anywhere');
     } else {
       setSimulatedLocation(null);
     }
-  }, [testMode, booking]);
+  }, [testMode]);
   
   // Handle starting the ride
   const handleStartRide = async () => {
@@ -129,8 +128,30 @@ const ActiveRideScreen = () => {
   const handleCompleteRide = async () => {
     if (!booking) return;
     
+    // If test mode is on, bypass location check
+    if (testMode) {
+      try {
+        await updateBookingStatus({
+          id: bookingId,
+          status: 'completed'
+        }).unwrap();
+        
+        toast.success('Ride completed successfully!');
+        refetch();
+        setShowCompleteConfirm(false);
+        
+        // Navigate to booking details or history after a short delay
+        setTimeout(() => {
+          navigate('/my-bookings');
+        }, 2000);
+      } catch (err) {
+        toast.error(err?.data?.message || 'Failed to complete the ride');
+      }
+      return;
+    }
+    
     // Check if user is in the parking zone (bypass in test mode)
-    if (!isInParkingZone && !testMode) {
+    if (!isInParkingZone) {
       toast.error('You must be in the designated parking zone to complete the ride');
       setShowCompleteConfirm(false);
       return;
@@ -196,16 +217,25 @@ const ActiveRideScreen = () => {
             In Progress
           </span>
         }
-        
-        {/* Test Mode Toggle */}
+      </h1>
+      
+      {/* Test Mode Toggle - Made more prominent */}
+      <div className="mb-4">
         <button 
           onClick={() => setTestMode(!testMode)} 
-          className={`ml-4 text-sm ${testMode ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'} px-3 py-1 rounded-full flex items-center`}
+          className={`px-4 py-2 rounded-lg text-white font-medium flex items-center ${
+            testMode ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
         >
-          <FaTools className="mr-1" />
-          {testMode ? 'Test Mode ON' : 'Test Mode OFF'}
+          <FaTools className="mr-2" />
+          {testMode ? 'Test Mode ON - Click to Disable' : 'Enable Test Mode'}
         </button>
-      </h1>
+        {testMode && (
+          <p className="mt-2 text-sm text-red-600">
+            Test mode is active. You can complete the ride from any location.
+          </p>
+        )}
+      </div>
       
       {isLoadingBooking ? (
         <Loader />

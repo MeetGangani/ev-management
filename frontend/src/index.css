@@ -6,6 +6,7 @@
 .leaflet-container {
   width: 100%;
   height: 100%;
+  z-index: 1;
 }
 
 /* Fix marker icon display issues */
@@ -33,4 +34,9 @@
 /* Add smooth animation to marker movements */
 .leaflet-marker-icon {
   transition: transform 0.3s ease-out;
+}
+
+/* Ensure circles render correctly */
+.leaflet-overlay-pane svg path {
+  pointer-events: auto;
 }
