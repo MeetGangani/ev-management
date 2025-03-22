@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
-import { FaCalendarAlt, FaClock, FaArrowLeft, FaCreditCard, FaSpinner } from 'react-icons/fa';
+import { FaCalendarAlt, FaClock, FaArrowLeft, FaCreditCard, FaSpinner, FaMapMarkerAlt } from 'react-icons/fa';
 import Loader from '../components/Loader';
 import { useGetEVByIdQuery } from '../slices/evsApiSlice';
 import { useCreateBookingMutation } from '../slices/bookingsApiSlice';
+import { useGetStationsQuery } from '../slices/stationsApiSlice';
 
 // Add a message component for unverified users
 const AadhaarVerificationMessage = () => (
@@ -37,6 +38,8 @@ const BookingScreen = () => {
   const [startTime, setStartTime] = useState('');
   const [duration, setDuration] = useState(1);
   const [totalPrice, setTotalPrice] = useState(0);
+  const [selectedSourceStation, setSelectedSourceStation] = useState('');
+  const [selectedDestinationStation, setSelectedDestinationStation] = useState('');
   
   // Fetch EV data from API
   const { 
@@ -44,6 +47,13 @@ const BookingScreen = () => {
     isLoading, 
     error 
   } = useGetEVByIdQuery(evId);
+  
+  // Fetch all stations
+  const {
+    data: stations,
+    isLoading: stationsLoading,
+    error: stationsError
+  } = useGetStationsQuery();
   
   // Booking mutation
   const [createBooking, { isLoading: isBooking, error: bookingError }] = useCreateBookingMutation();
@@ -57,6 +67,13 @@ const BookingScreen = () => {
     console.log("BookingScreen: userInfo =", userInfo);
     console.log("BookingScreen: ev =", ev);
   }, [evId, userInfo, ev]);
+  
+  // Auto-select source station based on EV's current station
+  useEffect(() => {
+    if (ev && ev.station && ev.station._id) {
+      setSelectedSourceStation(ev.station._id);
+    }
+  }, [ev]);
   
   // Calculate the total price whenever duration changes or when EV data is loaded
   useEffect(() => {
@@ -110,6 +127,16 @@ const BookingScreen = () => {
       toast.error('EV information not available');
       return;
     }
+    
+    if (!selectedSourceStation) {
+      toast.error('Please select a pickup station');
+      return;
+    }
+    
+    if (!selectedDestinationStation) {
+      toast.error('Please select a drop-off station');
+      return;
+    }
 
     // Add check for unverified users
     if (isUnverifiedCustomer()) {
@@ -127,8 +154,8 @@ const BookingScreen = () => {
       // Create booking data object
       const bookingData = {
         evId: ev._id,
-        startStationId: ev.station._id,
-        endStationId: ev.station._id, // Set end station same as start station for now
+        startStationId: selectedSourceStation,
+        endStationId: selectedDestinationStation,
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),
         duration: duration, // Add duration field (in hours)
@@ -176,11 +203,15 @@ const BookingScreen = () => {
       
       {isUnverifiedCustomer() && <AadhaarVerificationMessage />}
       
-      {isLoading ? (
+      {isLoading || stationsLoading ? (
         <Loader />
       ) : error && !isUnverifiedCustomer() ? (
         <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4">
           {error?.data?.message || 'Error loading EV details'}
+        </div>
+      ) : stationsError ? (
+        <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4">
+          {stationsError?.data?.message || 'Error loading stations'}
         </div>
       ) : !ev ? (
         <div className="bg-yellow-100 text-yellow-700 p-4 rounded-lg mb-4">
@@ -246,6 +277,55 @@ const BookingScreen = () => {
                 <h2 className="text-xl font-semibold mb-4">Booking Details</h2>
                 
                 <form onSubmit={handleSubmit}>
+                  {/* Station Selection Section */}
+                  <div className="mb-4">
+                    <label className="block text-gray-700 mb-2 font-medium">
+                      <FaMapMarkerAlt className="inline mr-2 text-blue-500" />
+                      Pickup Station
+                    </label>
+                    <select
+                      value={selectedSourceStation}
+                      onChange={(e) => setSelectedSourceStation(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Select pickup station</option>
+                      {stations && stations.map((station) => (
+                        <option 
+                          key={station._id} 
+                          value={station._id}
+                          disabled={station.status !== 'active'}
+                        >
+                          {station.name} - {station.address}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-gray-700 mb-2 font-medium">
+                      <FaMapMarkerAlt className="inline mr-2 text-blue-500" />
+                      Drop-off Station
+                    </label>
+                    <select
+                      value={selectedDestinationStation}
+                      onChange={(e) => setSelectedDestinationStation(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Select drop-off station</option>
+                      {stations && stations.map((station) => (
+                        <option 
+                          key={station._id} 
+                          value={station._id}
+                          disabled={station.status !== 'active'}
+                        >
+                          {station.name} - {station.address}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
                   <div className="mb-4">
                     <label className="block text-gray-700 mb-2 font-medium">
                       <FaCalendarAlt className="inline mr-2 text-blue-500" />
@@ -302,6 +382,12 @@ const BookingScreen = () => {
                       <span className="text-gray-600">Duration:</span>
                       <span>{duration} {duration === 1 ? 'hour' : 'hours'}</span>
                     </div>
+                    {selectedSourceStation && selectedDestinationStation && selectedSourceStation !== selectedDestinationStation && (
+                      <div className="flex justify-between mb-2 text-amber-600">
+                        <span>Different drop-off station:</span>
+                        <span>Will affect pricing</span>
+                      </div>
+                    )}
                     <div className="border-t border-gray-200 pt-2 mt-2">
                       <div className="flex justify-between font-bold">
                         <span>Total Price:</span>
