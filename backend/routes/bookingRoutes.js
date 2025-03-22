@@ -9,9 +9,8 @@ import {
   getPenaltyStatistics,
   updateBookingLocation,
   cancelBooking,
-  completeBooking,
-  applyPenaltyToBooking,
-  searchBookings
+  completeRide,
+  addTestPenalty,
 } from '../controllers/bookingController.js';
 import { protect, admin, adminOrStationMaster, verifiedCustomer } from '../middleware/authMiddleware.js';
 
@@ -39,7 +38,9 @@ router.route('/:id/damage-report').post(protect, adminOrStationMaster, reportDam
 
 router.route('/:id/location').put(protect, updateBookingLocation);
 
-router.post('/search', protect, searchBookings);
-router.post('/:id/apply-penalty', protect, applyPenaltyToBooking);
+router.put('/:id/complete', protect, completeRide);
+
+// Test route - available in all environments for testing
+router.route('/:id/test-penalty').post(protect, admin, addTestPenalty);
 
 export default router; 

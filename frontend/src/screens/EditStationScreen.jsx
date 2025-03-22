@@ -77,34 +77,58 @@ const EditStationScreen = () => {
   const submitHandler = async (e) => {
     e.preventDefault();
 
+    // Validate required fields
+    if (!name || !address) {
+      toast.error('Name and address are required');
+      return;
+    }
+
     // Validate coordinates
-    if (latitude && longitude) {
-      const lat = parseFloat(latitude);
-      const lng = parseFloat(longitude);
-      if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        toast.error('Please enter valid coordinates');
-        return;
-      }
+    if (!latitude || !longitude) {
+      toast.error('Coordinates are required');
+      return;
+    }
+
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      toast.error('Please enter valid coordinates');
+      return;
+    }
+
+    // Validate geofence radius
+    const radius = parseInt(geofenceRadius);
+    if (isNaN(radius) || radius <= 0) {
+      toast.error('Please enter a valid geofence radius');
+      return;
     }
 
     try {
+      const updateData = {
+        name: name.trim(),
+        address: address.trim(),
+        operatingHours: {
+          opening: operatingHours.opening || '09:00',
+          closing: operatingHours.closing || '18:00'
+        },
+        stationMasterId: stationMasterId || null,
+        geofenceParameters: {
+          coordinates: [parseFloat(longitude), parseFloat(latitude)],
+          radius: radius
+        }
+      };
+
+      console.log('Updating station with data:', updateData); // Debug log
+
       await updateStation({
         stationId,
-        data: {
-          name,
-          address,
-          operatingHours,
-          stationMasterId: stationMasterId || null,
-          geofenceParameters: {
-            coordinates: [parseFloat(longitude), parseFloat(latitude)],
-            radius: parseInt(geofenceRadius)
-          }
-        }
+        data: updateData
       }).unwrap();
 
       toast.success('Station updated successfully');
       navigate('/admin/stations');
     } catch (err) {
+      console.error('Update error:', err); // Debug log
       toast.error(err?.data?.message || 'Failed to update station');
     }
   };

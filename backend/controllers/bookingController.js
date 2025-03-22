@@ -3,24 +3,7 @@ import Booking from '../models/bookingModel.js';
 import EV from '../models/evModel.js';
 import Station from '../models/stationModel.js';
 import User from '../models/userModel.js';
-import Penalty from '../models/penaltyModel.js';
-import Payment from '../models/paymentModel.js';
-
-// Helper functions for API responses
-const successResponse = (res, message, data = {}, statusCode = 200) => {
-  return res.status(statusCode).json({
-    success: true,
-    message,
-    ...data
-  });
-};
-
-const errorResponse = (res, message, statusCode = 400) => {
-  return res.status(statusCode).json({
-    success: false,
-    message
-  });
-};
+import mongoose from 'mongoose';
 
 // @desc    Create a new booking
 // @route   POST /api/bookings
@@ -143,7 +126,8 @@ const getBookings = asyncHandler(async (req, res) => {
 // @access  Private
 const getMyBookings = asyncHandler(async (req, res) => {
   const bookings = await Booking.find({ customerId: req.user._id })
-    .populate('evId', 'model manufacturer imageUrl')
+    .populate('evId', 'model manufacturer imageUrl registrationNumber')
+    .populate('customerId', 'name email')
     .populate('startStationId', 'name address')
     .populate('endStationId', 'name address')
     .sort({ createdAt: -1 });
@@ -400,121 +384,88 @@ const reportDamage = asyncHandler(async (req, res) => {
 // @route   GET /api/bookings/penalty-stats
 // @access  Private/Admin
 const getPenaltyStatistics = asyncHandler(async (req, res) => {
-  if (req.user.role !== 'admin') {
-    res.status(401);
-    throw new Error('Not authorized to access penalty statistics');
-  }
+  const penaltyBookings = await Booking.find({
+    $or: [
+      { hasPenalty: true },
+      { penalty: { $exists: true } }
+    ]
+  })
+  .populate('customerId', 'name email')
+  .populate('evId', 'model manufacturer registrationNumber')
+  .select('customerId evId penalty penaltyAmount penaltyReason hasPenalty createdAt updatedAt');
 
-  // Get penalty statistics
-  const totalPenalizedBookings = await Booking.countDocuments({ hasPenalty: true });
-  const totalPenaltyAmount = await Booking.aggregate([
-    { $match: { hasPenalty: true } },
-    { $group: { _id: null, total: { $sum: "$penaltyAmount" } } }
-  ]);
-  
-  // Get penalty types breakdown
-  const lateReturnCount = await Booking.countDocuments({
-    penaltyReason: { $regex: /late return/i }
-  });
-  
-  const damageCount = await Booking.countDocuments({
-    damageReport: { $exists: true, $ne: "" }
-  });
-  
-  const otherPenaltyCount = totalPenalizedBookings - (lateReturnCount + damageCount);
+  // Calculate summary statistics
+  const totalPenaltyAmount = penaltyBookings.reduce((total, booking) => {
+    const amount = booking.penalty ? booking.penalty.amount : booking.penaltyAmount || 0;
+    return total + amount;
+  }, 0);
 
-  res.status(200).json({
-    totalPenalizedBookings,
-    totalPenaltyAmount: totalPenaltyAmount.length > 0 ? totalPenaltyAmount[0].total : 0,
-    penaltyBreakdown: {
-      lateReturn: lateReturnCount,
-      damage: damageCount,
-      other: otherPenaltyCount
+  // Group penalties by customer
+  const customerPenalties = {};
+  
+  penaltyBookings.forEach(booking => {
+    const customerId = booking.customerId?._id?.toString() || 'unknown';
+    const customerName = booking.customerId?.name || 'Unknown';
+    const customerEmail = booking.customerId?.email || 'No email';
+    const amount = booking.penalty ? booking.penalty.amount : booking.penaltyAmount || 0;
+    
+    if (!customerPenalties[customerId]) {
+      customerPenalties[customerId] = {
+        customerId,
+        customerName,
+        customerEmail,
+        totalAmount: 0,
+        count: 0,
+        bookings: []
+      };
     }
+    
+    customerPenalties[customerId].totalAmount += amount;
+    customerPenalties[customerId].count += 1;
+    customerPenalties[customerId].bookings.push({
+      bookingId: booking._id,
+      amount: amount,
+      reason: booking.penalty?.reason || booking.penaltyReason || 'Unknown reason',
+      date: booking.penalty?.timestamp || booking.updatedAt,
+      vehicle: `${booking.evId?.manufacturer || ''} ${booking.evId?.model || ''} (${booking.evId?.registrationNumber || 'Unknown'})`
+    });
+  });
+
+  res.json({
+    totalPenaltyCount: penaltyBookings.length,
+    totalPenaltyAmount,
+    customerPenalties: Object.values(customerPenalties)
   });
 });
 
-// @desc    Update booking location
+// @desc    Update booking location and penalty
 // @route   PUT /api/bookings/:id/location
-// @access  Private/Customer
+// @access  Private
 const updateBookingLocation = asyncHandler(async (req, res) => {
-  const booking = await Booking.findById(req.params.id)
-    .populate('customerId')
-    .populate('startStationId')
-    .populate('evId');
+  const booking = await Booking.findById(req.params.id);
 
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found');
   }
 
-  // Only the customer who owns the booking can update its location
-  if (req.user._id.toString() !== booking.customerId._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to update this booking');
-  }
-
-  // Only allow location updates for ongoing bookings
-  if (booking.status !== 'ongoing') {
-    res.status(400);
-    throw new Error('Location can only be updated for ongoing bookings');
-  }
-
-  const { location } = req.body;
-
-  if (!location || !location.latitude || !location.longitude) {
-    res.status(400);
-    throw new Error('Location data is required (latitude, longitude)');
-  }
-
-  // Create Point geometry
-  const point = {
-    type: 'Point',
-    coordinates: [parseFloat(location.longitude), parseFloat(location.latitude)],
-  };
-
-  // Add timestamp to the location
-  const locationWithTimestamp = {
-    ...point,
-    timestamp: new Date(),
-  };
-
-  // Update the booking's last known location
-  booking.lastKnownLocation = locationWithTimestamp;
-
-  // Check if within geofence (station radius)
-  const stationLng = booking.startStationId.location.coordinates[0];
-  const stationLat = booking.startStationId.location.coordinates[1];
-  const stationRadius = booking.startStationId.radius || 100; // default to 100m if not specified
-
-  // Calculate distance between current location and station
-  const distanceToStation = calculateDistance(
-    location.latitude,
-    location.longitude,
-    stationLat,
-    stationLng
-  );
-
-  // Determine if within geofence
-  const isWithinGeofence = distanceToStation <= stationRadius;
-
-  // If this is the first location update for an ongoing booking, set start location
-  if (booking.status === 'ongoing' && !booking.geofenceData?.startLocation) {
-    booking.geofenceData = {
-      ...booking.geofenceData,
-      startLocation: point,
+  // Update location if provided
+  if (req.body.location) {
+    booking.lastKnownLocation = {
+      type: 'Point',
+      coordinates: [req.body.location.longitude, req.body.location.latitude],
+      timestamp: new Date()
     };
+  }
+
+  // Update penalty if provided
+  if (req.body.penalty) {
+    booking.penalty = req.body.penalty;
   }
 
   const updatedBooking = await booking.save();
 
-  res.status(200).json({
-    bookingId: updatedBooking._id,
-    lastKnownLocation: updatedBooking.lastKnownLocation,
-    isWithinGeofence,
-    distance: distanceToStation,
-    stationRadius
-  });
+  res.json(updatedBooking);
 });
 
 // Helper function to calculate distance between two coordinates (Haversine formula)
@@ -535,299 +486,110 @@ function deg2rad(deg) {
   return deg * (Math.PI / 180);
 }
 
-// @desc    Apply penalty to a booking
-// @route   POST /api/bookings/:id/apply-penalty
-// @access  Private/Admin/StationMaster
-const applyPenaltyToBooking = asyncHandler(async (req, res) => {
+// @desc    Complete a ride
+// @route   PUT /api/bookings/:id/complete
+// @access  Private
+const completeRide = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const booking = await Booking.findById(req.params.id)
+      .populate('evId')
+      .populate('startStationId')
+      .populate('endStationId');
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    if (booking.status === 'completed') {
+      throw new Error('Ride is already completed');
+    }
+
+    // Update booking status
+    booking.status = 'completed';
+    booking.endTime = new Date();
+    await booking.save({ session });
+
+    // Update EV status and location
+    await EV.findByIdAndUpdate(
+      booking.evId._id,
+      {
+        status: 'available',
+        station: booking.endStationId._id,
+        batteryLevel: req.body.batteryLevel || booking.evId.batteryLevel
+      },
+      { session }
+    );
+
+    // Remove EV from start station and decrease count
+    await Station.findByIdAndUpdate(
+      booking.startStationId._id,
+      {
+        $pull: { evs: booking.evId._id }
+      },
+      { session }
+    );
+
+    // Add EV to end station and increase count
+    await Station.findByIdAndUpdate(
+      booking.endStationId._id,
+      {
+        $addToSet: { evs: booking.evId._id },
+        $inc: { availableEVs: 1 }
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    // Return updated booking with populated fields
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('evId')
+      .populate('startStationId')
+      .populate('endStationId')
+      .populate('userId');
+
+    res.json(updatedBooking);
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+});
+
+// @desc    Add test penalty to a booking (for testing only)
+// @route   POST /api/bookings/:id/test-penalty
+// @access  Private/Admin (development only)
+const addTestPenalty = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.id)
-    .populate('customerId', 'name email')
-    .populate('evId', 'manufacturer model registrationNumber');
+    .populate('evId', 'model manufacturer registrationNumber');
 
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found');
   }
 
-  // Only admins and station masters can apply penalties
-  if (req.user.role !== 'admin' && req.user.role !== 'stationMaster') {
-    res.status(401);
-    throw new Error('Not authorized to apply penalties');
-  }
+  const { penaltyAmount, reason } = req.body;
+  const amount = penaltyAmount || 100;
+  const penaltyReason = reason || 'Test penalty for development purposes';
 
-  const { penaltyType, description, amount, evidence } = req.body;
-
-  if (!penaltyType || !description || !amount) {
-    res.status(400);
-    throw new Error('Penalty type, description and amount are required');
-  }
-
-  // Create a new penalty record
-  const penalty = new Penalty({
-    bookingId: booking._id,
-    userId: booking.customerId._id,
-    type: penaltyType,
-    amount: parseFloat(amount),
-    title: penaltyType.charAt(0).toUpperCase() + penaltyType.slice(1).replace('_', ' '),
-    description: description,
-    details: {
-      appliedBy: req.user._id,
-      appliedByRole: req.user.role,
-      evidence: evidence || [],
-      timestamp: new Date().toISOString()
-    },
-    status: 'pending'
-  });
-
-  await penalty.save();
-
-  // Update the booking with penalty reference if it has penalties array
-  if (booking.penalties) {
-    booking.penalties.push(penalty._id);
-  } else {
-    booking.penalties = [penalty._id];
-  }
-
-  // Update penalty amounts in booking
-  booking.hasPenalty = true;
+  // Add penalty to booking (new format)
+  booking.penalty = {
+    amount: amount,
+    reason: penaltyReason,
+    timestamp: new Date().toISOString()
+  };
   
-  // Add to totalPenaltyAmount if exists, otherwise create it
-  if (booking.totalPenaltyAmount) {
-    booking.totalPenaltyAmount += penalty.amount;
-  } else {
-    booking.totalPenaltyAmount = penalty.amount;
-  }
+  // Also set legacy fields for compatibility
+  booking.hasPenalty = true;
+  booking.penaltyAmount = amount;
+  booking.penaltyReason = penaltyReason;
 
-  // If this is the first penalty, set the penalty reason directly
-  if (!booking.penaltyReason) {
-    booking.penaltyReason = description;
-  } else {
-    booking.penaltyReason += '; ' + description;
-  }
-
-  // If there's no penaltyAmount field, initialize it
-  if (!booking.penaltyAmount) {
-    booking.penaltyAmount = penalty.amount;
-  } else {
-    booking.penaltyAmount += penalty.amount;
-  }
-
-  // Update finalAmount if it exists
-  if (booking.finalAmount) {
-    booking.finalAmount += penalty.amount;
-  }
-
-  // If booking is completed, don't change status
-  // If it's not completed yet, mark as penalized
-  if (booking.status !== 'completed') {
-    booking.status = 'penalized';
-  }
-
-  await booking.save();
-
-  // Send notification to customer about the penalty
-  // ... (notification logic would go here)
-
-  res.status(200).json({
-    success: true,
-    message: 'Penalty applied successfully',
-    penalty,
-    booking
-  });
-});
-
-// Function to complete a booking
-const completeBooking = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { locationData } = req.body; // Contains final location information
-    
-    // Find the booking
-    const booking = await Booking.findById(id)
-      .populate('evId')
-      .populate('startStationId')
-      .populate('endStationId')
-      .populate('customerId');
-    
-    if (!booking) {
-      return errorResponse(res, 'Booking not found', 404);
-    }
-    
-    // Check if the booking is active
-    if (booking.status !== 'ongoing') {
-      return errorResponse(res, 'Only ongoing bookings can be completed', 400);
-    }
-    
-    // Set end time and calculate duration
-    const endTime = new Date();
-    const durationMs = endTime - booking.startTime;
-    const durationMinutes = Math.ceil(durationMs / (1000 * 60)); // Round up to nearest minute
-    
-    // Calculate the final cost based on duration and vehicle rate
-    const vehicleRate = booking.evId.pricePerHour / 60 || 1; // Default to 1 if not specified
-    const baseCost = durationMinutes * vehicleRate;
-    
-    // Get any existing penalties
-    const penalties = await Penalty.find({ bookingId: id });
-    const penaltyAmount = penalties.reduce((sum, penalty) => sum + penalty.amount, 0);
-    
-    // Calculate final amount with penalties
-    const finalAmount = baseCost + penaltyAmount;
-    
-    // Add improper parking penalty if far from destination station
-    if (locationData && booking.endStationId) {
-      const endStationLocation = {
-        lat: booking.endStationId.latitude || booking.endStationId.location?.lat, 
-        lng: booking.endStationId.longitude || booking.endStationId.location?.lng
-      };
-      
-      if (endStationLocation.lat && endStationLocation.lng && 
-          locationData.position && locationData.position.lat && locationData.position.lng) {
-        const distance = calculateDistance(
-          locationData.position.lat,
-          locationData.position.lng,
-          endStationLocation.lat,
-          endStationLocation.lng
-        );
-        
-        // If more than 50 meters away from station, apply improper parking penalty
-        if (distance > 50) {
-          const penaltyAmount = 200; // Base penalty amount
-          let multiplier = 1;
-          
-          if (distance > 100) multiplier = 1.5;
-          if (distance > 500) multiplier = 2;
-          
-          const improperParkingPenalty = new Penalty({
-            bookingId: id,
-            userId: booking.customerId._id,
-            type: 'improper_parking',
-            amount: penaltyAmount * multiplier,
-            title: 'Improper Parking',
-            description: 'Penalty for returning vehicle outside designated area',
-            details: {
-              location: locationData.position,
-              distanceFromStation: distance,
-              timestamp: new Date().toISOString()
-            },
-            status: 'pending'
-          });
-          
-          await improperParkingPenalty.save();
-          
-          // Add to booking
-          booking.penalties.push(improperParkingPenalty._id);
-          booking.totalPenaltyAmount += improperParkingPenalty.amount;
-        }
-      }
-    }
-    
-    // Update the booking
-    booking.endTime = endTime;
-    booking.status = 'completed';
-    booking.totalDuration = durationMinutes;
-    booking.finalLocation = locationData?.position || null;
-    booking.baseCost = baseCost;
-    booking.finalAmount = finalAmount;
-    
-    // Update the EV status
-    await EV.findByIdAndUpdate(booking.evId._id, {
-      currentStationId: booking.endStationId._id,
-      status: 'available',
-      currentLocation: locationData?.position || null
-    });
-    
-    // Update user stats
-    await User.findByIdAndUpdate(booking.customerId._id, {
-      $inc: {
-        totalRides: 1,
-        totalSpent: finalAmount
-      }
-    });
-    
-    // Save the booking with all updates
-    await booking.save();
-    
-    // Create payment entry if needed
-    if (finalAmount > 0) {
-      const payment = new Payment({
-        userId: booking.customerId._id,
-        bookingId: booking._id,
-        amount: finalAmount,
-        status: 'pending',
-        description: `Payment for ride #${booking._id}`
-      });
-      
-      await payment.save();
-      
-      // Add payment reference to booking
-      booking.paymentId = payment._id;
-      await booking.save();
-    }
-    
-    return successResponse(res, 'Booking completed successfully', {
-      booking,
-      duration: durationMinutes,
-      baseCost,
-      penaltyAmount,
-      finalAmount
-    });
-  } catch (error) {
-    console.error('Error completing booking:', error);
-    return errorResponse(res, 'Failed to complete booking', 500);
-  }
-};
-
-// @desc    Search bookings by ID or customer name
-// @route   POST /api/bookings/search
-// @access  Private/Admin/StationMaster
-const searchBookings = asyncHandler(async (req, res) => {
-  const { query } = req.body;
-
-  // Only admins and station masters can search bookings
-  if (req.user.role !== 'admin' && req.user.role !== 'stationMaster') {
-    res.status(401);
-    throw new Error('Not authorized to search bookings');
-  }
-
-  let bookings = [];
-
-  // If the query looks like an ObjectId, try to search by ID first
-  if (query.match(/^[0-9a-fA-F]{24}$/)) {
-    const bookingById = await Booking.findById(query)
-      .populate('customerId', 'name email phone')
-      .populate('evId', 'model manufacturer')
-      .populate('startStationId', 'name')
-      .populate('endStationId', 'name');
-    
-    if (bookingById) {
-      bookings.push(bookingById);
-    }
-  }
-
-  // If no results by ID (or ID search wasn't performed), search by customer name
-  if (bookings.length === 0) {
-    // First find users that match the query
-    const users = await User.find({ 
-      name: { $regex: query, $options: 'i' } 
-    }).select('_id');
-    
-    const userIds = users.map(user => user._id);
-    
-    // Then find bookings for those users
-    if (userIds.length > 0) {
-      bookings = await Booking.find({ 
-        customerId: { $in: userIds } 
-      })
-        .populate('customerId', 'name email phone')
-        .populate('evId', 'model manufacturer')
-        .populate('startStationId', 'name')
-        .populate('endStationId', 'name')
-        .sort({ createdAt: -1 })
-        .limit(20);
-    }
-  }
-
-  res.status(200).json(bookings);
+  const updatedBooking = await booking.save();
+  res.json(updatedBooking);
 });
 
 export {
@@ -840,7 +602,6 @@ export {
   getPenaltyStatistics,
   updateBookingLocation,
   cancelBooking,
-  completeBooking,
-  applyPenaltyToBooking,
-  searchBookings
+  completeRide,
+  addTestPenalty,
 }; 

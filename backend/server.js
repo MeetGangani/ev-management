@@ -21,13 +21,31 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(cookieParser());
 
-// Middleware to handle double /api prefix
+// Middleware to handle API prefix issues
 app.use((req, res, next) => {
+  // Log all API requests
+  if (req.url.includes('/api') || req.url.includes('lapi')) {
+    console.log(`Original request URL: ${req.url}`);
+  }
+  
+  // Fix double /api prefix
   if (req.url.startsWith('/api/api/')) {
-    // Remove one /api/ prefix
     req.url = req.url.replace('/api/api/', '/api/');
     console.log(`Fixed double API prefix. New URL: ${req.url}`);
   }
+  
+  // Fix missing leading slash
+  if (req.url.startsWith('api/')) {
+    req.url = `/${req.url}`;
+    console.log(`Added leading slash. New URL: ${req.url}`);
+  }
+  
+  // Fix 'lapi' typo
+  if (req.url.includes('lapi/')) {
+    req.url = req.url.replace('lapi/', '/api/');
+    console.log(`Fixed 'lapi' typo. New URL: ${req.url}`);
+  }
+  
   next();
 });
 

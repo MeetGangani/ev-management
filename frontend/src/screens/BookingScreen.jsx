@@ -7,7 +7,6 @@ import Loader from '../components/Loader';
 import { useGetEVByIdQuery } from '../slices/evsApiSlice';
 import { useCreateBookingMutation } from '../slices/bookingsApiSlice';
 import { useGetStationsQuery } from '../slices/stationsApiSlice';
-import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 
 // Add a message component for unverified users
 const AadhaarVerificationMessage = () => (
@@ -41,8 +40,6 @@ const BookingScreen = () => {
   const [totalPrice, setTotalPrice] = useState(0);
   const [selectedSourceStation, setSelectedSourceStation] = useState('');
   const [selectedDestinationStation, setSelectedDestinationStation] = useState('');
-  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
-  const [pendingBookingData, setPendingBookingData] = useState(null);
   
   // Fetch EV data from API
   const { 
@@ -112,80 +109,64 @@ const BookingScreen = () => {
            userInfo.aadharVerified === false;
   };
   
-  const validateFormData = () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validation
     if (!startDate) {
       toast.error('Please select a pickup date');
-      return false;
+      return;
     }
     
     if (!startTime) {
       toast.error('Please select a pickup time');
-      return false;
+      return;
     }
     
     if (!ev) {
       toast.error('EV information not available');
-      return false;
+      return;
     }
     
     if (!selectedSourceStation) {
       toast.error('Please select a pickup station');
-      return false;
+      return;
     }
     
     if (!selectedDestinationStation) {
       toast.error('Please select a drop-off station');
-      return false;
+      return;
     }
 
     // Add check for unverified users
     if (isUnverifiedCustomer()) {
       toast.error('Please verify your Aadhaar to make a real booking');
-      return false;
-    }
-    
-    return true;
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    // Validation
-    if (!validateFormData()) {
       return;
     }
-
-    // Combine date and time
-    const startDateTime = new Date(`${startDate}T${startTime}`);
-      
-    // Calculate end time based on duration
-    const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 60 * 1000);
     
-    // Create booking data object
-    const bookingData = {
-      evId: ev._id,
-      startStationId: selectedSourceStation,
-      endStationId: selectedDestinationStation,
-      startTime: startDateTime.toISOString(),
-      endTime: endDateTime.toISOString(),
-      duration: duration, // Add duration field (in hours)
-      totalCost: totalPrice, // Add totalCost field
-      bookingType: 'scheduled',
-    };
-    
-    console.log('Prepared booking data:', bookingData);
-    
-    // Store the booking data and show privacy policy
-    setPendingBookingData(bookingData);
-    setShowPrivacyPolicy(true);
-  };
-  
-  // Function to complete the booking after privacy policy acceptance
-  const handlePrivacyPolicyAccepted = async () => {
     try {
-      // Make API call to create booking using the pending booking data
-      console.log('Creating booking with data:', pendingBookingData);
-      const response = await createBooking(pendingBookingData).unwrap();
+      // Combine date and time
+      const startDateTime = new Date(`${startDate}T${startTime}`);
+      
+      // Calculate end time based on duration
+      const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 60 * 1000);
+      
+      // Create booking data object
+      const bookingData = {
+        evId: ev._id,
+        startStationId: selectedSourceStation,
+        endStationId: selectedDestinationStation,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        duration: duration, // Add duration field (in hours)
+        totalCost: totalPrice, // Add totalCost field
+        bookingType: 'scheduled',
+      };
+      
+      console.log('Creating booking with data:', bookingData);
+      
+      // Make API call to create booking
+      const response = await createBooking(bookingData).unwrap();
       console.log('Booking created:', response);
       
       toast.success('Booking successful! Your EV is reserved.');
@@ -438,13 +419,6 @@ const BookingScreen = () => {
           </div>
         </div>
       )}
-
-      {/* Add the Privacy Policy Modal */}
-      <PrivacyPolicyModal 
-        isOpen={showPrivacyPolicy} 
-        onClose={() => setShowPrivacyPolicy(false)} 
-        onAccept={handlePrivacyPolicyAccepted}
-      />
     </div>
   );
 };

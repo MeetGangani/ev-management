@@ -10,7 +10,6 @@ import {
 import './index.css';
 import store from './store';
 import { Provider } from 'react-redux';
-import { ThemeProvider } from './context/ThemeContext.jsx';
 import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen.jsx';
 import RegisterScreen from './screens/RegisterScreen.jsx';
@@ -33,6 +32,8 @@ import StationMasterRoute from './components/StationMasterRoute.jsx';
 import VerifiedCustomerRoute from './components/VerifiedCustomerRoute.jsx';
 import EditStationScreen from './screens/EditStationScreen.jsx';
 import PenaltyDashboardScreen from './screens/PenaltyDashboardScreen.jsx';
+import LiveTrackingScreen from './screens/LiveTrackingScreen';
+import PenaltyReceipt from './components/PenaltyReceipt';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -68,6 +69,9 @@ const router = createBrowserRouter(
           <Route index element={<StationMasterDashboardScreen />} />
           <Route path='bookings' element={<StationBookingsScreen />} />
         </Route>
+
+        <Route path='/bookings/:bookingId/track' element={<LiveTrackingScreen />} />
+        <Route path='/bookings/:bookingId/penalty-receipt' element={<PenaltyReceipt />} />
       </Route>
     </Route>
   )
@@ -76,9 +80,7 @@ const router = createBrowserRouter(
 ReactDOM.createRoot(document.getElementById('root')).render(
   <Provider store={store}>
     <React.StrictMode>
-      <ThemeProvider>
-        <RouterProvider router={router} />
-      </ThemeProvider>
+      <RouterProvider router={router} />
     </React.StrictMode>
   </Provider>
 );

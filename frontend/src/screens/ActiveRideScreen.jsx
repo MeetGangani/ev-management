@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { FaArrowLeft, FaMapMarkerAlt, FaClock, FaCarSide, FaCheck, FaCamera, FaTools } from 'react-icons/fa';
@@ -19,7 +19,7 @@ const ActiveRideScreen = () => {
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [isInParkingZone, setIsInParkingZone] = useState(false);
   const [userLocationData, setUserLocationData] = useState(null);
-  const [mapKey, setMapKey] = useState('stable-map-key');
+  const [mapKey, setMapKey] = useState(Date.now().toString());
   const [mapError, setMapError] = useState(false);
   const [nearestStation, setNearestStation] = useState(null);
   const [showDestinationSelector, setShowDestinationSelector] = useState(false);
@@ -253,30 +253,51 @@ const ActiveRideScreen = () => {
         </MessageAlert>
       ) : (
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {/* Map with user location */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">Live Location</h2>
-            <div className="rounded-lg overflow-hidden shadow-md h-96">
+          {/* Map section */}
+          <div className="h-[50vh] w-full relative">
+            {mapError ? (
+              <div className="h-full w-full flex items-center justify-center bg-gray-100">
+                <div className="text-center p-4">
+                  <p className="text-red-600 mb-2">Map failed to load</p>
+                  <button 
+                    onClick={() => {
+                      setMapKey(Date.now().toString());
+                      setMapError(false);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : booking && (
               <ErrorBoundary onError={() => setMapError(true)}>
-                {booking ? (
-                  <LiveLocationMap 
-                    key={`map-${testMode ? 'test' : 'normal'}`}
-                    bookingData={booking} 
-                    stations={allStations || []} 
-                    height="100%" 
-                    watchPosition={booking?.status === 'ongoing'}
-                    onLocationUpdate={handleLocationUpdate}
-                    testMode={testMode}
-                    simulatedLocation={simulatedLocation}
-                    onPenalty={refetch}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full bg-gray-100">
-                    <p className="text-gray-500">Loading map data...</p>
-                  </div>
-                )}
+                <LiveLocationMap 
+                  key={`ride-map-${mapKey}`}
+                  bookingData={booking} 
+                  stations={allStations || []}
+                  height="100%"
+                  watchPosition={booking.status === 'ongoing'}
+                  onLocationUpdate={handleLocationUpdate}
+                  testMode={testMode}
+                  simulatedLocation={simulatedLocation}
+                />
               </ErrorBoundary>
-            </div>
+            )}
+            
+            {booking && booking.status === 'ongoing' && (
+              <div className="absolute top-4 left-4 right-4 bg-white bg-opacity-90 p-3 rounded-lg shadow-md">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center text-blue-800">
+                    <FaClock className="mr-2" />
+                    <span className="font-mono font-bold">{formatElapsedTime(elapsedTime)}</span>
+                  </div>
+                  <div className="text-green-700 font-medium">
+                    {getRemainingTime()}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Ride information section */}
@@ -311,6 +332,19 @@ const ActiveRideScreen = () => {
                     ? 'You can now end your ride safely. Thank you for parking correctly!' 
                     : 'Please return to the highlighted zone on the map to end your ride.'}
                 </p>
+              </div>
+            )}
+            
+            {/* Add this new section for tracking */}
+            {booking.status === 'ongoing' && (
+              <div className="mt-4 flex justify-center">
+                <Link 
+                  to={`/bookings/${booking._id}/track`}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 inline-flex items-center gap-2 text-lg"
+                >
+                  <FaMapMarkerAlt />
+                  Track Live Location
+                </Link>
               </div>
             )}
             

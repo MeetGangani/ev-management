@@ -51,6 +51,10 @@ const stationSchema = mongoose.Schema(
         ref: 'EV',
       },
     ],
+    availableEVs: {
+      type: Number,
+      default: 0
+    }
   },
   {
     timestamps: true,

@@ -17,6 +17,7 @@ import {
   useUpdateStationMutation,
   useAssignStationMasterMutation
 } from '../slices/stationsApiSlice';
+import { ErrorBoundary } from 'react-error-boundary';
 
 // Map Marker Component
 const MapMarker = ({ position, setPosition }) => {
@@ -82,6 +83,9 @@ const AdminStationsScreen = () => {
 
   // Update the state for coordinates
   const [mapPosition, setMapPosition] = useState([28.6139, 77.2090]); // Default to Delhi, India
+
+  const mapRef = useRef(null);
+  const [mapKey, setMapKey] = useState(Date.now());
 
   // Add an effect to update latitude and longitude when map position changes
   useEffect(() => {
@@ -474,13 +478,29 @@ const AdminStationsScreen = () => {
                   </div>
                 </div>
                 <div className="h-[300px] w-full border border-gray-300 rounded-md overflow-hidden">
-                  <MapWrapper
-                    center={mapPosition}
-                    zoom={13}
-                    style={{ height: '100%', width: '100%' }}
+                  <ErrorBoundary
+                    fallback={
+                      <div className="h-full flex items-center justify-center">
+                        <button 
+                          onClick={() => setMapKey(Date.now())}
+                          className="px-4 py-2 bg-blue-500 text-white rounded"
+                        >
+                          Reload Map
+                        </button>
+                      </div>
+                    }
                   >
-                    <MapMarker position={mapPosition} setPosition={setMapPosition} />
-                  </MapWrapper>
+                    <MapWrapper
+                      key={mapKey}
+                      ref={mapRef}
+                      center={mapPosition}
+                      zoom={13}
+                      style={{ height: '100%', width: '100%' }}
+                      id={`admin-station-${mapKey}`}
+                    >
+                      <MapMarker position={mapPosition} setPosition={setMapPosition} />
+                    </MapWrapper>
+                  </ErrorBoundary>
                 </div>
                 <div className="mt-2 flex items-center justify-center">
                   <button

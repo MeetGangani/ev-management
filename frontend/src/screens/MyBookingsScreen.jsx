@@ -201,7 +201,7 @@ const MyBookingsScreen = () => {
                         )}
                         <div>
                           <div className="text-sm font-medium text-gray-900">
-                            {booking.evId.manufacturer} {booking.evId.model}
+                            {booking.evId?.manufacturer} {booking.evId?.model}
                           </div>
                         </div>
                       </div>
@@ -235,6 +235,11 @@ const MyBookingsScreen = () => {
                       >
                         {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                       </span>
+                      {(booking.penalty || booking.hasPenalty) && (
+                        <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          Penalty
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {isActiveBooking(booking) ? (
@@ -255,11 +260,22 @@ const MyBookingsScreen = () => {
                           )}
                         </Link>
                       ) : (
-                        <span className="text-xs text-gray-500">
-                          {booking.status === 'completed' ? 'Completed' : 
-                           booking.status === 'cancelled' ? 'Cancelled' : 
-                           'Awaiting approval'}
-                        </span>
+                        <div>
+                          {(booking.penalty || booking.hasPenalty) ? (
+                            <Link 
+                              to={`/bookings/${booking._id}/penalty-receipt`}
+                              className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-md inline-flex items-center"
+                            >
+                              View Receipt
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-gray-500">
+                              {booking.status === 'completed' ? 'Completed' : 
+                               booking.status === 'cancelled' ? 'Cancelled' : 
+                               'Awaiting approval'}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>

@@ -30,6 +30,13 @@ export const bookingsApiSlice = apiSlice.injectEndpoints({
       keepUnusedDataFor: 5,
       providesTags: ['Booking'],
     }),
+    getPenaltyStatistics: builder.query({
+      query: () => ({
+        url: `${BOOKINGS_URL}/penalty-stats`,
+      }),
+      keepUnusedDataFor: 5,
+      providesTags: ['Booking'],
+    }),
 
     // Mutations
     createBooking: builder.mutation({
@@ -70,6 +77,36 @@ export const bookingsApiSlice = apiSlice.injectEndpoints({
         body: { location },
       }),
     }),
+    updateBooking: builder.mutation({
+      query: ({ bookingId, ...data }) => ({
+        url: `${BOOKINGS_URL}/${bookingId}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Booking'],
+    }),
+    updateBookingLocation: builder.mutation({
+      query: ({ bookingId, location, penalty }) => ({
+        url: `${BOOKINGS_URL}/${bookingId}/location`,
+        method: 'PUT',
+        body: { location, penalty },
+      }),
+    }),
+    // For testing - add test penalties
+    addTestPenalty: builder.mutation({
+      query: ({ bookingId, penaltyAmount, reason }) => {
+        // Ensure proper URL format
+        const sanitizedBookingId = bookingId.trim();
+        console.log(`Making test penalty request to: ${BOOKINGS_URL}/${sanitizedBookingId}/test-penalty`);
+        
+        return {
+          url: `${BOOKINGS_URL}/${sanitizedBookingId}/test-penalty`,
+          method: 'POST',
+          body: { penaltyAmount, reason },
+        };
+      },
+      invalidatesTags: ['Booking'],
+    }),
   }),
 });
 
@@ -77,9 +114,13 @@ export const {
   useGetBookingsQuery,
   useGetMyBookingsQuery,
   useGetBookingByIdQuery,
+  useGetPenaltyStatisticsQuery,
   useCreateBookingMutation,
   useUpdateBookingStatusMutation,
   useCancelBookingMutation,
   useReportDamageMutation,
   useUpdateUserLocationMutation,
+  useUpdateBookingMutation,
+  useUpdateBookingLocationMutation,
+  useAddTestPenaltyMutation,
 } = bookingsApiSlice; 

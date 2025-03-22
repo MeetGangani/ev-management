@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import EV from '../models/evModel.js';
 import Station from '../models/stationModel.js';
+import mongoose from 'mongoose';
 
 // @desc    Get all EVs
 // @route   GET /api/evs
@@ -72,60 +73,66 @@ const getEVById = asyncHandler(async (req, res) => {
 // @route   POST /api/evs
 // @access  Private/Admin
 const createEV = asyncHandler(async (req, res) => {
-  const {
-    registrationNumber,
-    model,
-    manufacturer,
-    batteryCapacity,
-    range,
-    stationId,
-    pricePerHour,
-    features,
-    imageUrl,
-    colorCode,
-    condition,
-  } = req.body;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  // Verify station exists
-  const station = await Station.findById(stationId);
-  if (!station) {
-    res.status(404);
-    throw new Error('Station not found');
-  }
+  try {
+    const {
+      registrationNumber,
+      model,
+      manufacturer,
+      batteryCapacity,
+      range,
+      stationId,
+      pricePerHour,
+      features,
+      imageUrl,
+      colorCode,
+      condition,
+    } = req.body;
 
-  // Check if registration number already exists
-  const evExists = await EV.findOne({ registrationNumber });
-  if (evExists) {
+    // Verify station exists
+    const station = await Station.findById(stationId);
+    if (!station) {
+      throw new Error('Station not found');
+    }
+
+    // Create the EV
+    const ev = await EV.create([{
+      registrationNumber,
+      model,
+      manufacturer,
+      batteryCapacity,
+      batteryLevel: 100, // Default to full battery
+      range,
+      status: 'available',
+      station: stationId,
+      currentStation: stationId,
+      pricePerHour,
+      features,
+      imageUrl,
+      colorCode,
+      condition,
+    }], { session });
+
+    // Update station's EV list and count
+    await Station.findByIdAndUpdate(
+      stationId,
+      { 
+        $push: { evs: ev[0]._id },
+        $inc: { availableEVs: 1 }
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+    res.status(201).json(ev[0]);
+  } catch (error) {
+    await session.abortTransaction();
     res.status(400);
-    throw new Error('EV with this registration number already exists');
-  }
-
-  const ev = await EV.create({
-    registrationNumber,
-    model,
-    manufacturer,
-    batteryCapacity,
-    range,
-    station: stationId,
-    condition: condition || 'good', // Set condition with default
-    currentLocation: {
-      coordinates: station.geofenceParameters.coordinates, // Initialize with station coordinates
-    },
-    pricePerHour,
-    features: features || [],
-    imageUrl: imageUrl || '/images/default-ev.jpg',
-    colorCode: colorCode || '#000000',
-  });
-
-  if (ev) {
-    // Add the EV to the station's evs array
-    station.evs.push(ev._id);
-    await station.save();
-    
-    res.status(201).json(ev);
-  } else {
-    res.status(400);
-    throw new Error('Invalid EV data');
+    throw new Error(error.message);
+  } finally {
+    session.endSession();
   }
 });
 
@@ -150,6 +157,7 @@ const updateEV = asyncHandler(async (req, res) => {
     status,
     condition,
     stationId,
+    currentStationId,
     currentLocation,
     pricePerHour,
     features,
@@ -181,6 +189,7 @@ const updateEV = asyncHandler(async (req, res) => {
 
     // Update EV's station
     ev.station = stationId;
+    ev.currentStation = stationId;
   }
 
   // Update the other EV fields
@@ -196,6 +205,7 @@ const updateEV = asyncHandler(async (req, res) => {
   if (features) ev.features = features;
   if (imageUrl) ev.imageUrl = imageUrl;
   if (colorCode) ev.colorCode = colorCode;
+  if (currentStationId) ev.currentStation = currentStationId;
 
   // Update location if provided
   if (currentLocation && currentLocation.coordinates) {
