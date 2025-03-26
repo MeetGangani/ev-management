@@ -12,9 +12,8 @@ const MapWrapper = forwardRef(({ center, zoom, children, className, style, id = 
   const [isClient, setIsClient] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
-  const mapContainerId = `map-container-${id}`;
+  const mapContainerId = `map-container-${id}-${Math.random().toString(36).substr(2, 9)}`; // Unique ID
   const containerRef = useRef(null);
-  const [mapKey] = useState(`leaflet-${id}-${Date.now()}`);
 
   // Expose the map instance through the ref
   useImperativeHandle(ref, () => ({
@@ -28,34 +27,29 @@ const MapWrapper = forwardRef(({ center, zoom, children, className, style, id = 
     }
   }));
 
-  // Fix Leaflet's icon loading issues once when component mounts
+  // Initialize Leaflet only once on client side
   useEffect(() => {
+    setIsClient(true);
+
+    // Fix Leaflet's icon loading issues
     delete L.Icon.Default.prototype._getIconUrl;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
       iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
       shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
     });
-    
-    // Set client-side rendering flag
-    setIsClient(true);
 
-    // Cleanup any existing map with this ID when component unmounts
+    // Cleanup function
     return () => {
       if (mapRef.current) {
         console.log(`Cleaning up map ${mapContainerId}`);
-        try {
-          // Attempt to properly remove the map
-          mapRef.current.remove();
-          mapRef.current = null;
-        } catch (e) {
-          console.error('Error cleaning up map:', e);
-        }
+        mapRef.current.remove();
+        mapRef.current = null;
+        setMapReady(false);
       }
     };
-  }, [mapContainerId]);
+  }, []); // Empty dependency array - only run once
 
-  // Wait until we're on the client side to render the map
   if (!isClient) {
     return (
       <div
@@ -77,10 +71,9 @@ const MapWrapper = forwardRef(({ center, zoom, children, className, style, id = 
       ref={containerRef}
       style={{ ...style, position: 'relative' }}
       className={className}
-      key={mapKey}
     >
       <MapContainer
-        key={mapKey}
+        key={mapContainerId} // Use unique key
         center={center}
         zoom={zoom}
         style={{ height: '100%', width: '100%' }}
@@ -89,31 +82,17 @@ const MapWrapper = forwardRef(({ center, zoom, children, className, style, id = 
           mapRef.current = map;
           setMapReady(true);
           
-          // Apply any fixes needed for React strict mode
+          // Fix map size after a short delay
           setTimeout(() => {
-            if (map && map.invalidateSize) {
-              map.invalidateSize();
-            }
-          }, 0);
+            map.invalidateSize();
+          }, 100);
         }}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
-        {mapReady && (
-          <MapConsumer>
-            {(map) => {
-              // Store map reference if not already set
-              if (!mapRef.current) {
-                mapRef.current = map;
-              }
-              
-              // Only return children when map is ready
-              return children;
-            }}
-          </MapConsumer>
-        )}
+        {mapReady && children}
       </MapContainer>
     </div>
   );

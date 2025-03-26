@@ -1,16 +1,31 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { FaMapMarkerAlt, FaClock, FaInfoCircle, FaLocationArrow, FaBolt, FaHistory } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaClock, FaInfoCircle, FaLocationArrow, FaBolt, FaHistory, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import Loader from '../components/Loader';
 import { useGetNearestStationsQuery } from '../slices/stationsApiSlice';
+import { useGetMyBookingsQuery } from '../slices/bookingsApiSlice';
 
 const CustomerDashboardScreen = () => {
   const { userInfo } = useSelector((state) => state.auth);
   const [userLocation, setUserLocation] = useState(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState('');
+  const [penalties, setPenalties] = useState([]);
+
+  // Get customer's bookings to check for penalties
+  const { data: bookings, isLoading: isLoadingBookings } = useGetMyBookingsQuery();
+
+  // Extract penalties from bookings
+  useEffect(() => {
+    if (bookings) {
+      const bookingsWithPenalties = bookings.filter(booking => 
+        booking.penalty || booking.hasPenalty
+      );
+      setPenalties(bookingsWithPenalties);
+    }
+  }, [bookings]);
 
   // Get nearest stations if location is available
   const { data: nearestStations, isLoading: isLoadingNearestStations, error: nearestStationsError } = 
@@ -234,6 +249,58 @@ const CustomerDashboardScreen = () => {
                 Manage Profile
               </Link>
             </div>
+          </div>
+
+          {/* Penalties Section */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 flex items-center">
+              <FaExclamationTriangle className="text-red-500 mr-2" />
+              Penalties
+            </h2>
+            
+            {isLoadingBookings ? (
+              <Loader />
+            ) : penalties.length > 0 ? (
+              <div className="space-y-4">
+                {penalties.slice(0, 3).map((booking) => (
+                  <div key={booking._id} className="border border-red-100 rounded-md p-3 bg-red-50">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-medium">{booking.evId?.manufacturer} {booking.evId?.model}</p>
+                        <p className="text-sm text-gray-600">
+                          {booking.penalty ? 
+                            new Date(booking.penalty.timestamp).toLocaleDateString() : 
+                            new Date(booking.updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-red-600 font-bold">
+                        ₹{booking.penalty ? booking.penalty.amount : booking.penaltyAmount}
+                      </div>
+                    </div>
+                    <p className="text-sm mb-2">
+                      {booking.penalty ? booking.penalty.reason : booking.penaltyReason}
+                    </p>
+                    <Link 
+                      to={`/bookings/${booking._id}/penalty-receipt`}
+                      className="text-sm text-red-600 hover:text-red-800 font-medium"
+                    >
+                      View Receipt →
+                    </Link>
+                  </div>
+                ))}
+                
+                {penalties.length > 3 && (
+                  <Link 
+                    to="/my-bookings"
+                    className="block text-center text-sm text-red-600 hover:text-red-800 font-medium"
+                  >
+                    View all penalties
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No penalties on your account. Let's keep it that way!</p>
+            )}
           </div>
         </div>
       </div>

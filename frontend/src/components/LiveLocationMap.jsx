@@ -355,201 +355,276 @@ const LiveLocationMap = ({
   
   // Initialize map and location tracking
   useEffect(() => {
-    // Ensure we only initialize once and when DOM is ready
-    if (!mapContainerRef.current || mapRef.current) return;
+    // Keep track of whether this effect has already run
+    const effectHasRun = mapRef.current !== null;
+    
+    // Only initialize once and when DOM is ready
+    if (!mapContainerRef.current || effectHasRun) return;
     
     // Generate a unique ID for the map container to prevent initialization issues
     const mapId = `map-${bookingData?._id || 'default'}-${Date.now()}`;
     mapContainerRef.current.id = mapId;
     
+    console.log(`Initializing map with ID: ${mapId}`);
+    
     // Force a small delay to make sure the container is fully rendered
-    setTimeout(() => {
+    const mapInitTimeout = setTimeout(() => {
       try {
-        // Create map instance
-        const map = L.map(mapId, { zoomControl: true }).setView(geofenceCenter, 15);
-        mapRef.current = map;
-        
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
-        
-        // Add click handler for simulation mode
-        map.on('click', handleMapClick);
-        
-        // Add simulation control button
-        const simulationButton = document.createElement('button');
-        simulationButton.className = 'simulation-button';
-        simulationButton.innerText = 'Enable Simulation';
-        simulationButton.onclick = (e) => {
-          e.stopPropagation();
-          setSimulationMode(!simulationMode);
-          simulationButton.innerText = !simulationMode ? 'Disable Simulation' : 'Enable Simulation';
-          simulationButton.classList.toggle('active', !simulationMode);
+        // Only create a map if one doesn't exist
+        if (!mapRef.current) {
+          // Create map instance
+          const map = L.map(mapId, { 
+            zoomControl: true,
+            // Add these options to fix Leaflet rendering issues
+            fadeAnimation: false,
+            zoomAnimation: false,
+            markerZoomAnimation: false
+          }).setView(geofenceCenter, 15);
           
-          // Show or hide the hint
-          if (!simulationMode) {
-            // Show hint
-            if (!document.querySelector('.simulation-hint')) {
-              const hintDiv = document.createElement('div');
-              hintDiv.className = 'simulation-hint';
-              hintDiv.innerText = 'Click anywhere on the map to simulate your location';
-              map.getContainer().appendChild(hintDiv);
-            }
-          } else {
-            // Hide hint
-            const hint = document.querySelector('.simulation-hint');
-            if (hint && hint.parentNode) {
-              hint.parentNode.removeChild(hint);
-            }
-          }
-        };
-        map.getContainer().appendChild(simulationButton);
-        
-        // Add destination station marker and geofence polygon
-        // Add destination marker with orange color
-        const destinationIcon = L.divIcon({
-          className: 'geofence-marker',
-          html: '<div style="width:24px;height:24px;"></div>',
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        });
-        
-        L.marker(geofenceCenter, { icon: destinationIcon })
-          .addTo(map)
-          .bindPopup('Destination Station: ' + (bookingData?.endStationId?.name || 'End Point'))
-          .openPopup();
-        
-        // Convert Turf polygon to Leaflet format
-        const leafletPolygonPoints = geofencePolygon.geometry.coordinates[0].map(coord => 
-          [coord[1], coord[0]] // Leaflet uses [lat, lng] while GeoJSON uses [lng, lat]
-        );
-        
-        // Save boundary points for later use
-        boundaryPointsRef.current = leafletPolygonPoints;
-        
-        // Add geofence polygon with styling
-        geofencePolygonRef.current = L.polygon(leafletPolygonPoints, {
-          color: 'orange',
-          fillColor: 'orange',
-          fillOpacity: 0.2,
-          weight: 2
-        }).addTo(map);
-        
-        // Zoom to include the polygon
-        map.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
-        
-        // If in test mode and not in simulation mode, use simulated location
-        if (testMode && !simulationMode) {
-          const fakePosition = {
-            coords: {
-              latitude: simulatedLocation?.lat || geofenceCenter[0],
-              longitude: simulatedLocation?.lng || geofenceCenter[1],
-              accuracy: simulatedLocation?.accuracy || 10
+          mapRef.current = map;
+          
+          // Add tile layer
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          }).addTo(map);
+          
+          // Add click handler for simulation mode
+          map.on('click', handleMapClick);
+          
+          // Add simulation control button
+          const simulationButton = document.createElement('button');
+          simulationButton.className = 'simulation-button';
+          simulationButton.innerText = 'Enable Simulation';
+          simulationButton.onclick = (e) => {
+            e.stopPropagation();
+            setSimulationMode(!simulationMode);
+            simulationButton.innerText = !simulationMode ? 'Disable Simulation' : 'Enable Simulation';
+            simulationButton.classList.toggle('active', !simulationMode);
+            
+            // Show or hide the hint
+            if (!simulationMode) {
+              // Show hint
+              if (!document.querySelector('.simulation-hint')) {
+                const hintDiv = document.createElement('div');
+                hintDiv.className = 'simulation-hint';
+                hintDiv.innerText = 'Click anywhere on the map to simulate your location';
+                map.getContainer().appendChild(hintDiv);
+              }
+            } else {
+              // Hide hint
+              const hint = document.querySelector('.simulation-hint');
+              if (hint && hint.parentNode) {
+                hint.parentNode.removeChild(hint);
+              }
             }
           };
-          updateLocation(fakePosition);
+          map.getContainer().appendChild(simulationButton);
           
-          // Force set in parking zone for test mode
-          setIsInParkingZone(true);
-          if (onLocationUpdate) {
-            onLocationUpdate({
-              position: { 
-                lat: fakePosition.coords.latitude, 
-                lng: fakePosition.coords.longitude 
-              },
-              accuracy: fakePosition.coords.accuracy,
-              isInGeofence: true
+          // Add destination station marker and geofence polygon
+          // Add destination marker with orange color
+          const destinationIcon = L.divIcon({
+            className: 'geofence-marker',
+            html: '<div style="width:24px;height:24px;"></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          
+          L.marker(geofenceCenter, { icon: destinationIcon })
+            .addTo(map)
+            .bindPopup('Destination Station: ' + (bookingData?.endStationId?.name || 'End Point'))
+            .openPopup();
+          
+          // Convert Turf polygon to Leaflet format
+          const leafletPolygonPoints = geofencePolygon.geometry.coordinates[0].map(coord => 
+            [coord[1], coord[0]] // Leaflet uses [lat, lng] while GeoJSON uses [lng, lat]
+          );
+          
+          // Save boundary points for later use
+          boundaryPointsRef.current = leafletPolygonPoints;
+          
+          // Add geofence polygon with styling
+          geofencePolygonRef.current = L.polygon(leafletPolygonPoints, {
+            color: 'orange',
+            fillColor: 'orange',
+            fillOpacity: 0.2,
+            weight: 2
+          }).addTo(map);
+          
+          // Zoom to include the polygon
+          map.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
+          
+          // If in test mode and not in simulation mode, use simulated location
+          if (testMode && !simulationMode) {
+            const fakePosition = {
+              coords: {
+                latitude: simulatedLocation?.lat || geofenceCenter[0],
+                longitude: simulatedLocation?.lng || geofenceCenter[1],
+                accuracy: simulatedLocation?.accuracy || 10
+              }
+            };
+            updateLocation(fakePosition);
+            
+            // Force set in parking zone for test mode
+            setIsInParkingZone(true);
+            if (onLocationUpdate) {
+              onLocationUpdate({
+                position: { 
+                  lat: fakePosition.coords.latitude, 
+                  lng: fakePosition.coords.longitude 
+                },
+                accuracy: fakePosition.coords.accuracy,
+                isInGeofence: true
+              });
+            }
+          } else if (watchPosition && !simulationMode) {
+            // Watch real location
+            if ('geolocation' in navigator) {
+              // Get initial position
+              navigator.geolocation.getCurrentPosition(
+                updateLocation,
+                (error) => {
+                  console.error('Error getting location:', error);
+                  toast.error(`Could not get your location: ${error.message}`);
+                  
+                  // If we can't get user location, just show the map with geofence
+                  map.invalidateSize();
+                  map.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
+                },
+                {
+                  enableHighAccuracy: true,
+                  timeout: 10000,
+                  maximumAge: 0
+                }
+              );
+              
+              // Setup continuous tracking
+              watchIdRef.current = navigator.geolocation.watchPosition(
+                updateLocation,
+                (error) => {
+                  console.error('Error watching location:', error);
+                },
+                {
+                  enableHighAccuracy: true,
+                  timeout: 10000,
+                  maximumAge: 0
+                }
+              );
+            } else {
+              toast.error('Geolocation is not supported by your browser');
+            }
+          }
+          
+          // Add other stations
+          if (stations && stations.length > 0) {
+            stations.forEach(station => {
+              // Skip destination station as it's already added
+              if (station._id === bookingData?.endStationId?._id) return;
+              
+              // For simplicity, use fixed coordinates for stations
+              const stationLat = 23.12; 
+              const stationLng = 72.63;
+              
+              if (stationLat && stationLng) {
+                // Create station icon
+                const stationIcon = L.divIcon({
+                  className: 'station-marker',
+                  html: '<div style="width:20px;height:20px;"></div>',
+                  iconSize: [20, 20],
+                  iconAnchor: [10, 10]
+                });
+                
+                L.marker([stationLat, stationLng], { icon: stationIcon })
+                  .addTo(map)
+                  .bindPopup(`
+                    <div>
+                      <h3 style="font-weight:bold">${station.name}</h3>
+                      <p>${station.address}</p>
+                      <p>Operating Hours: ${station.operatingHours?.opening || 'N/A'} - ${station.operatingHours?.closing || 'N/A'}</p>
+                    </div>
+                  `);
+              }
             });
           }
-        } else if (watchPosition && !simulationMode) {
-          // Watch real location
-          if ('geolocation' in navigator) {
-            // Get initial position
-            navigator.geolocation.getCurrentPosition(
-              updateLocation,
-              (error) => {
-                console.error('Error getting location:', error);
-                toast.error(`Could not get your location: ${error.message}`);
-                
-                // If we can't get user location, just show the map with geofence
-                map.invalidateSize();
-                map.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-            
-            // Setup continuous tracking
-            watchIdRef.current = navigator.geolocation.watchPosition(
-              updateLocation,
-              (error) => {
-                console.error('Error watching location:', error);
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-          } else {
-            toast.error('Geolocation is not supported by your browser');
-          }
-        }
-        
-        // Add other stations
-        if (stations && stations.length > 0) {
-          stations.forEach(station => {
-            // Skip destination station as it's already added
-            if (station._id === bookingData?.endStationId?._id) return;
-            
-            // For simplicity, use fixed coordinates for stations
-            const stationLat = 23.12; 
-            const stationLng = 72.63;
-            
-            if (stationLat && stationLng) {
-              // Create station icon
-              const stationIcon = L.divIcon({
-                className: 'station-marker',
-                html: '<div style="width:20px;height:20px;"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-              });
+          
+          // Invalidate size after a delay to handle any container sizing issues
+          setTimeout(() => {
+            if (mapRef.current) {
+              mapRef.current.invalidateSize();
               
-              L.marker([stationLat, stationLng], { icon: stationIcon })
-                .addTo(map)
-                .bindPopup(`
-                  <div>
-                    <h3 style="font-weight:bold">${station.name}</h3>
-                    <p>${station.address}</p>
-                    <p>Operating Hours: ${station.operatingHours?.opening || 'N/A'} - ${station.operatingHours?.closing || 'N/A'}</p>
-                  </div>
-                `);
+              // Fit to geofence bounds again to make sure it's visible
+              if (geofencePolygonRef.current) {
+                mapRef.current.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
+              }
             }
-          });
+          }, 300);
         }
-        
-        // Invalidate size after a delay to handle any container sizing issues
-        setTimeout(() => {
-          if (mapRef.current) {
-            mapRef.current.invalidateSize();
-            
-            // Fit to geofence bounds again to make sure it's visible
-            if (geofencePolygonRef.current) {
-              mapRef.current.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
-            }
-          }
-        }, 300);
       } catch (error) {
         console.error('Error initializing map:', error);
         toast.error('Failed to initialize map. Please try again.');
       }
     }, 100);
     
-  }, [bookingData, stations, geofenceCenter, geofencePolygon, watchPosition, onLocationUpdate, testMode, simulatedLocation, simulationMode]);
+    // Cleanup function to properly remove the map when component unmounts ONLY
+    // Not on every render or state change
+    return () => {
+      clearTimeout(mapInitTimeout);
+      
+      // Only remove the map when component is actually unmounting
+      if (mapRef.current) {
+        try {
+          const wasRemoved = document.getElementById(mapId) === null;
+          
+          if (wasRemoved) {
+            console.log('Map container already removed, cleaning up map instance');
+            mapRef.current.remove();
+            mapRef.current = null;
+          }
+        } catch (err) {
+          console.error('Error cleaning up map:', err);
+        }
+      }
+      
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  // Remove state dependencies that might cause map recreation
+  }, [bookingData?._id]);
+  
+  // Use a separate effect to handle map updates without recreating it
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    // Handle map updates that don't require recreating the map
+    const map = mapRef.current;
+    
+    // Update geofence if needed
+    if (geofencePolygonRef.current) {
+      map.removeLayer(geofencePolygonRef.current);
+    }
+    
+    // Convert Turf polygon to Leaflet format
+    const leafletPolygonPoints = geofencePolygon.geometry.coordinates[0].map(coord => 
+      [coord[1], coord[0]] // Leaflet uses [lat, lng] while GeoJSON uses [lng, lat]
+    );
+    
+    // Save boundary points for later use
+    boundaryPointsRef.current = leafletPolygonPoints;
+    
+    // Add geofence polygon with styling
+    geofencePolygonRef.current = L.polygon(leafletPolygonPoints, {
+      color: 'orange',
+      fillColor: 'orange',
+      fillOpacity: 0.2,
+      weight: 2
+    }).addTo(map);
+    
+    // Invalidate size and update view
+    map.invalidateSize();
+    map.fitBounds(geofencePolygonRef.current.getBounds(), { padding: [50, 50] });
+    
+  }, [geofencePolygon]);
   
   // Update simulation mode status when it changes
   useEffect(() => {

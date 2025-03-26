@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { FaClock, FaCalendarAlt, FaCheck, FaTimes, FaSpinner, FaArrowLeft, FaFilter, FaCarSide, FaMapMarkedAlt } from 'react-icons/fa';
 import Loader from '../components/Loader';
 import MessageAlert from '../components/MessageAlert';
+import { motion } from 'framer-motion';
 
 const MyBookingsScreen = () => {
   const navigate = useNavigate();
@@ -90,46 +91,57 @@ const MyBookingsScreen = () => {
   };
   
   return (
-    <div className="container mx-auto px-4 py-6">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="container mx-auto px-4 py-6"
+    >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <div>
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center text-blue-600 hover:text-blue-800 mb-4 md:mb-0"
+            className="flex items-center text-primary-400 hover:text-primary-300 transition-colors duration-300 mb-4 md:mb-0"
           >
             <FaArrowLeft className="mr-2" /> Back
           </button>
         </div>
-        <h1 className="text-2xl font-bold">My Bookings</h1>
-        <div className="flex items-center space-x-2 mt-4 md:mt-0">
-          <FaFilter className="text-gray-500" />
-          <div className="flex bg-gray-100 rounded-lg">
+        <h1 className="text-2xl font-bold gradient-text">My Bookings</h1>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="flex items-center space-x-2 mt-4 md:mt-0"
+        >
+          <FaFilter className="text-accent-teal" />
+          <div className="bg-primary-800/30 backdrop-blur-sm rounded-lg border border-primary-700/30 shadow-glass-sm">
             <button
-              className={`px-3 py-1 rounded-lg text-sm ${activeFilter === 'all' ? 'bg-blue-600 text-white' : 'text-gray-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${activeFilter === 'all' ? 'bg-accent-teal/20 text-accent-teal shadow-glow-teal-sm' : 'text-white/80 hover:text-white'}`}
               onClick={() => setActiveFilter('all')}
             >
               All
             </button>
             <button
-              className={`px-3 py-1 rounded-lg text-sm ${activeFilter === 'active' ? 'bg-blue-600 text-white' : 'text-gray-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${activeFilter === 'active' ? 'bg-accent-teal/20 text-accent-teal shadow-glow-teal-sm' : 'text-white/80 hover:text-white'}`}
               onClick={() => setActiveFilter('active')}
             >
               Active
             </button>
             <button
-              className={`px-3 py-1 rounded-lg text-sm ${activeFilter === 'upcoming' ? 'bg-blue-600 text-white' : 'text-gray-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${activeFilter === 'upcoming' ? 'bg-accent-teal/20 text-accent-teal shadow-glow-teal-sm' : 'text-white/80 hover:text-white'}`}
               onClick={() => setActiveFilter('upcoming')}
             >
               Upcoming
             </button>
             <button
-              className={`px-3 py-1 rounded-lg text-sm ${activeFilter === 'past' ? 'bg-blue-600 text-white' : 'text-gray-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${activeFilter === 'past' ? 'bg-accent-teal/20 text-accent-teal shadow-glow-teal-sm' : 'text-white/80 hover:text-white'}`}
               onClick={() => setActiveFilter('past')}
             >
               Past
             </button>
           </div>
-        </div>
+        </motion.div>
       </div>
       
       {isLoading ? (
@@ -139,9 +151,14 @@ const MyBookingsScreen = () => {
           {error?.data?.message || 'Error loading your bookings'}
         </MessageAlert>
       ) : filteredBookings && filteredBookings.length === 0 ? (
-        <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <h3 className="text-lg font-medium text-gray-700 mb-2">No bookings found</h3>
-          <p className="text-gray-500 mb-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+          className="bg-primary-800/20 backdrop-blur-sm rounded-xl border border-primary-700/30 p-8 text-center shadow-glass"
+        >
+          <h3 className="text-lg font-medium text-white mb-2">No bookings found</h3>
+          <p className="text-white/70 mb-6">
             {activeFilter === 'upcoming' 
               ? "You don't have any upcoming bookings." 
               : activeFilter === 'past' 
@@ -152,124 +169,159 @@ const MyBookingsScreen = () => {
           </p>
           <button
             onClick={() => navigate('/stations')}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-accent-teal to-accent-teal/80 text-white rounded-xl font-medium shadow-glow-teal hover:shadow-glow-teal-lg transition-all duration-300"
           >
             Browse Stations
           </button>
-        </div>
+        </motion.div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="card-glass border border-primary-600/20 shadow-glass overflow-hidden"
+        >
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-primary-700/30">
+              <thead className="bg-primary-800/50">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
                     EV Details
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
                     Booking Time
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
                     Station
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
                     Price
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
                     Status
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredBookings.map((booking) => (
-                  <tr key={booking._id} className="hover:bg-gray-50">
+              <tbody className="divide-y divide-primary-700/30">
+                {filteredBookings.map((booking, index) => (
+                  <motion.tr 
+                    key={booking._id} 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className="hover:bg-primary-800/30 transition-colors duration-200"
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         {booking.evId.imageUrl ? (
-                          <img
-                            className="h-10 w-16 object-cover rounded-md mr-3"
-                            src={booking.evId.imageUrl}
-                            alt={booking.evId.model}
-                          />
+                          <div className="h-12 w-16 rounded-md overflow-hidden border border-primary-600/30 shadow-glass-sm mr-3">
+                            <img
+                              className="h-full w-full object-cover"
+                              src={booking.evId.imageUrl}
+                              alt={booking.evId.model}
+                            />
+                          </div>
                         ) : (
-                          <div className="h-10 w-16 bg-gray-200 rounded-md mr-3 flex items-center justify-center text-gray-500 text-xs">
+                          <div className="h-12 w-16 bg-primary-800/50 rounded-md border border-primary-600/30 mr-3 flex items-center justify-center text-white/50 text-xs">
                             No image
                           </div>
                         )}
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {booking.evId.manufacturer} {booking.evId.model}
+                          <div className="text-sm font-medium text-white">
+                            {booking.evId?.manufacturer} {booking.evId?.model}
+                          </div>
+                          <div className="text-xs text-white/60">
+                            {booking.evId?.registrationNumber}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 mb-1">
-                        <FaCalendarAlt className="inline-block mr-1 text-blue-500" />
+                      <div className="text-sm text-white mb-1 flex items-center">
+                        <FaCalendarAlt className="mr-1.5 text-accent-teal" />
                         {formatDate(booking.startTime)}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        <FaClock className="inline-block mr-1" />
+                      <div className="text-xs text-white/60 flex items-center">
+                        <FaClock className="mr-1.5 text-white/40" />
                         {calculateDuration(booking.startTime, booking.endTime)} hours
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {booking.startStationId.name}
+                      <div className="text-sm font-medium text-white">
+                        {booking.startStationId?.name || 'Unknown Station'}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {booking.startStationId.address}
+                      <div className="text-xs text-white/60">
+                        {booking.startStationId?.address || 'No address available'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        ₹{booking.fare}
+                      <div className="text-sm font-medium text-white">
+                        ₹{booking.fare || booking.totalCost || '0'}
+                      </div>
+                      <div className="text-xs text-white/60">
+                        {booking.evId?.pricePerHour ? `₹${booking.evId.pricePerHour}/hr` : ''}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span 
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(booking.status)}`}
+                        className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(booking.status)}`}
                       >
                         {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                       </span>
+                      {(booking.penalty || booking.hasPenalty) && (
+                        <span className="ml-2 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          Penalty
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {isActiveBooking(booking) ? (
                         <Link 
                           to={`/ride/${booking._id}`}
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded-md inline-flex items-center"
+                          className="bg-gradient-to-r from-accent-teal to-accent-teal/80 hover:shadow-glow-teal text-white text-sm px-3 py-1.5 rounded-lg inline-flex items-center transition-all duration-300"
                         >
                           {booking.status === 'ongoing' ? (
                             <>
-                              <FaMapMarkedAlt className="mr-1" />
+                              <FaMapMarkedAlt className="mr-1.5" />
                               Track Ride
                             </>
                           ) : (
                             <>
-                              <FaCarSide className="mr-1" />
+                              <FaCarSide className="mr-1.5" />
                               Start Ride
                             </>
                           )}
                         </Link>
                       ) : (
-                        <span className="text-xs text-gray-500">
-                          {booking.status === 'completed' ? 'Completed' : 
-                           booking.status === 'cancelled' ? 'Cancelled' : 
-                           'Awaiting approval'}
-                        </span>
+                        <div>
+                          {(booking.penalty || booking.hasPenalty) ? (
+                            <Link 
+                              to={`/bookings/${booking._id}/penalty-receipt`}
+                              className="bg-gradient-to-r from-accent-red to-accent-red/80 hover:shadow-glow-red text-white text-sm px-3 py-1.5 rounded-lg inline-flex items-center transition-all duration-300"
+                            >
+                              View Receipt
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-white/60">
+                              {booking.status === 'completed' ? 'Completed' : 
+                               booking.status === 'cancelled' ? 'Cancelled' : 
+                               'Awaiting approval'}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 };
 

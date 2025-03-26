@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { FaCalendarAlt, FaClock, FaArrowLeft, FaCreditCard, FaSpinner, FaMapMarkerAlt } from 'react-icons/fa';
 import Loader from '../components/Loader';
+import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 import { useGetEVByIdQuery } from '../slices/evsApiSlice';
 import { useCreateBookingMutation } from '../slices/bookingsApiSlice';
 import { useGetStationsQuery } from '../slices/stationsApiSlice';
@@ -40,6 +41,8 @@ const BookingScreen = () => {
   const [totalPrice, setTotalPrice] = useState(0);
   const [selectedSourceStation, setSelectedSourceStation] = useState('');
   const [selectedDestinationStation, setSelectedDestinationStation] = useState('');
+  const [isPrivacyPolicyOpen, setIsPrivacyPolicyOpen] = useState(false);
+  const [bookingData, setBookingData] = useState(null);
   
   // Fetch EV data from API
   const { 
@@ -152,7 +155,7 @@ const BookingScreen = () => {
       const endDateTime = new Date(startDateTime.getTime() + duration * 60 * 60 * 1000);
       
       // Create booking data object
-      const bookingData = {
+      const data = {
         evId: ev._id,
         startStationId: selectedSourceStation,
         endStationId: selectedDestinationStation,
@@ -163,11 +166,27 @@ const BookingScreen = () => {
         bookingType: 'scheduled',
       };
       
+      // Store booking data and show privacy policy modal
+      setBookingData(data);
+      setIsPrivacyPolicyOpen(true);
+      
+    } catch (err) {
+      console.error('Failed to prepare booking:', err);
+      toast.error('Failed to prepare booking data. Please try again.');
+    }
+  };
+  
+  // Handle final booking after privacy policy acceptance
+  const handlePrivacyPolicyAccept = async () => {
+    try {
       console.log('Creating booking with data:', bookingData);
       
       // Make API call to create booking
       const response = await createBooking(bookingData).unwrap();
       console.log('Booking created:', response);
+      
+      // Close the privacy policy modal
+      setIsPrivacyPolicyOpen(false);
       
       toast.success('Booking successful! Your EV is reserved.');
       
@@ -180,6 +199,9 @@ const BookingScreen = () => {
     } catch (err) {
       console.error('Failed to create booking:', err);
       toast.error(err?.data?.message || 'Failed to create booking. Please try again.');
+      
+      // Close the privacy policy modal
+      setIsPrivacyPolicyOpen(false);
     }
   };
   
@@ -419,6 +441,13 @@ const BookingScreen = () => {
           </div>
         </div>
       )}
+      
+      {/* Privacy Policy Modal */}
+      <PrivacyPolicyModal 
+        isOpen={isPrivacyPolicyOpen}
+        onClose={() => setIsPrivacyPolicyOpen(false)}
+        onAccept={handlePrivacyPolicyAccept}
+      />
     </div>
   );
 };

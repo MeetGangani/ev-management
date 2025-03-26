@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { FaFilter, FaArrowLeft, FaUser, FaClock, FaCalendarAlt, FaPhoneAlt, FaEnvelope, FaCheck, FaTimes, FaSync } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import { motion } from 'framer-motion';
 import Loader from '../components/Loader';
 import MessageAlert from '../components/MessageAlert';
 import { useGetBookingsQuery, useUpdateBookingStatusMutation } from '../slices/bookingsApiSlice';
@@ -122,124 +123,173 @@ const StationBookingsScreen = () => {
   
   // Handle booking status update
   const handleStatusUpdate = async (bookingId, newStatus) => {
+    if (!bookingId) {
+      toast.error('Invalid booking ID');
+      return;
+    }
+    
+    console.log(`Updating booking ${bookingId} status to ${newStatus}`);
+    
     try {
-      await updateBookingStatus({
+      const updateData = {
         id: bookingId,
         status: newStatus
-      }).unwrap();
+      };
+      
+      // If completing the ride, explicitly set empty values for penalty fields
+      // to avoid sending undefined values
+      if (newStatus === 'completed') {
+        updateData.damageReport = '';
+        updateData.penaltyAmount = 0;
+        updateData.penaltyReason = '';
+      }
+      
+      const result = await updateBookingStatus(updateData).unwrap();
       
       toast.success(`Booking ${newStatus} successfully`);
+      console.log('Status update result:', result);
       refetch();
     } catch (err) {
+      console.error('Status update error:', err);
       toast.error(err?.data?.message || `Failed to update booking status to ${newStatus}`);
     }
   };
   
   return (
-    <div className="container mx-auto px-4 py-6">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="container mx-auto px-4 py-6"
+    >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <div>
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center text-blue-600 hover:text-blue-800 mb-4 md:mb-0"
+            className="flex items-center text-primary-400 hover:text-primary-300 transition-colors duration-300 mb-4 md:mb-0"
           >
             <FaArrowLeft className="mr-2" /> Back
           </button>
         </div>
-        <h1 className="text-2xl font-bold">Station Bookings</h1>
-        <div className="flex items-center space-x-2 mt-4 md:mt-0">
-          <FaFilter className="text-gray-500" />
-          <div className="flex bg-gray-100 rounded-lg">
+        <h1 className="text-2xl font-bold gradient-text">Station Bookings</h1>
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="flex items-center space-x-2 mt-4 md:mt-0"
+        >
+          <FaFilter className="text-accent-teal" />
+          <div className="bg-primary-800/30 backdrop-blur-sm rounded-lg border border-primary-700/30 shadow-glass-sm">
             <button
-              className={`px-3 py-1 rounded-lg text-sm ${activeTab === 'incoming' ? 'bg-blue-600 text-white' : 'text-gray-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${activeTab === 'incoming' ? 'bg-accent-teal/20 text-accent-teal shadow-glow-teal-sm' : 'text-white/80 hover:text-white'}`}
               onClick={() => setActiveTab('incoming')}
             >
               Today
             </button>
             <button
-              className={`px-3 py-1 rounded-lg text-sm ${activeTab === 'upcoming' ? 'bg-blue-600 text-white' : 'text-gray-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${activeTab === 'upcoming' ? 'bg-accent-teal/20 text-accent-teal shadow-glow-teal-sm' : 'text-white/80 hover:text-white'}`}
               onClick={() => setActiveTab('upcoming')}
             >
               Upcoming
             </button>
             <button
-              className={`px-3 py-1 rounded-lg text-sm ${activeTab === 'past' ? 'bg-blue-600 text-white' : 'text-gray-700'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 ${activeTab === 'past' ? 'bg-accent-teal/20 text-accent-teal shadow-glow-teal-sm' : 'text-white/80 hover:text-white'}`}
               onClick={() => setActiveTab('past')}
             >
               Past
             </button>
           </div>
-        </div>
+        </motion.div>
       </div>
       
       {isLoading ? (
         <Loader />
       ) : error ? (
-        <div>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <MessageAlert variant="danger">
             {error?.data?.message || 'Error accessing bookings. You may not have the right permissions.'}
           </MessageAlert>
           <div className="text-center mt-4">
             <button 
               onClick={handleRefetch}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-accent-teal to-accent-teal/80 text-white rounded-xl font-medium shadow-glow-teal hover:shadow-glow-teal-lg transition-all duration-300"
             >
               <FaSync className="mr-2" /> Refresh Data
             </button>
           </div>
-        </div>
+        </motion.div>
       ) : !bookings ? (
         <MessageAlert variant="warning">
           No booking data available. Please check your connection to the API.
         </MessageAlert>
       ) : filteredBookings.length === 0 ? (
-        <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <h3 className="text-lg font-medium text-gray-700 mb-2">No bookings found</h3>
-          <p className="text-gray-500">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+          className="bg-primary-800/20 backdrop-blur-sm rounded-xl border border-primary-700/30 p-8 text-center shadow-glass"
+        >
+          <h3 className="text-lg font-medium text-white mb-2">No bookings found</h3>
+          <p className="text-white/70">
             {activeTab === 'incoming' 
               ? "There are no bookings scheduled for today." 
               : activeTab === 'upcoming' 
                 ? "There are no upcoming bookings for your station." 
                 : "There are no past bookings for your station."}
           </p>
-        </div>
+        </motion.div>
       ) : (
-        <div className="bg-white rounded-lg shadow">
-          {filteredBookings.map((booking) => (
-            <div key={booking._id} className="border-b border-gray-200 p-6 hover:bg-gray-50">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="card-glass border border-primary-600/20 shadow-glass"
+        >
+          {filteredBookings.map((booking, index) => (
+            <motion.div 
+              key={booking._id} 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
+              className="border-b border-primary-600/30 p-6 hover:bg-primary-800/30 transition-all duration-300"
+            >
               <div className="flex flex-col lg:flex-row justify-between">
                 <div className="mb-4 lg:mb-0">
                   <div className="flex items-center mb-2">
-                    <h2 className="text-lg font-semibold">
+                    <h2 className="text-lg font-semibold text-white">
                       {booking.evId.manufacturer} {booking.evId.model}
                     </h2>
                     <span 
-                      className={`ml-3 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(booking.status)}`}
+                      className={`ml-3 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(booking.status)}`}
                     >
                       {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                     </span>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <FaCalendarAlt className="mr-2 text-blue-500" />
+                    <div className="flex items-center text-sm text-white/80">
+                      <FaCalendarAlt className="mr-2 text-accent-teal" />
                       {formatDate(booking.startTime)}
                     </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <FaClock className="mr-2 text-blue-500" />
+                    <div className="flex items-center text-sm text-white/80">
+                      <FaClock className="mr-2 text-accent-teal" />
                       Duration: {Math.round((new Date(booking.endTime) - new Date(booking.startTime)) / (60 * 60 * 1000))} hours
                     </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <FaUser className="mr-2 text-blue-500" />
+                    <div className="flex items-center text-sm text-white/80">
+                      <FaUser className="mr-2 text-accent-teal" />
                       {booking.customerId?.name || 'Unknown Customer'}
                     </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <FaEnvelope className="mr-2 text-blue-500" />
+                    <div className="flex items-center text-sm text-white/80">
+                      <FaEnvelope className="mr-2 text-accent-teal" />
                       {booking.customerId?.email || 'No email provided'}
                     </div>
                     {booking.customerId?.phone && (
-                      <div className="flex items-center text-sm text-gray-600">
-                        <FaPhoneAlt className="mr-2 text-blue-500" />
+                      <div className="flex items-center text-sm text-white/80">
+                        <FaPhoneAlt className="mr-2 text-accent-teal" />
                         {formatPhoneNumber(booking.customerId.phone)}
                       </div>
                     )}
@@ -247,8 +297,11 @@ const StationBookingsScreen = () => {
                 </div>
                 
                 <div className="flex flex-col space-y-2">
-                  <div className="text-lg font-bold text-blue-600 mb-2">
-                    ₹{booking.fare}
+                  <div className="text-lg font-bold text-accent-teal mb-2">
+                    ₹{booking.fare || booking.totalCost || '0'}
+                  </div>
+                  <div className="text-sm text-white/70 mb-1">
+                    Rate: ₹{booking.evId?.pricePerHour || '0'}/hr
                   </div>
                   
                   {booking.status === 'pending' && (
@@ -256,7 +309,7 @@ const StationBookingsScreen = () => {
                       <button
                         onClick={() => handleStatusUpdate(booking._id, 'approved')}
                         disabled={isUpdating}
-                        className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                        className="flex items-center justify-center px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-glow-sm disabled:opacity-50 transition-all duration-300"
                       >
                         <FaCheck className="mr-2" />
                         Approve
@@ -264,7 +317,7 @@ const StationBookingsScreen = () => {
                       <button
                         onClick={() => handleStatusUpdate(booking._id, 'cancelled')}
                         disabled={isUpdating}
-                        className="flex items-center justify-center px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                        className="flex items-center justify-center px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:shadow-glow-sm disabled:opacity-50 transition-all duration-300"
                       >
                         <FaTimes className="mr-2" />
                         Cancel
@@ -276,7 +329,7 @@ const StationBookingsScreen = () => {
                     <button
                       onClick={() => handleStatusUpdate(booking._id, 'completed')}
                       disabled={isUpdating}
-                      className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                      className="flex items-center justify-center px-4 py-2 bg-gradient-to-r from-accent-teal to-accent-teal/80 text-white rounded-lg hover:shadow-glow-teal disabled:opacity-50 transition-all duration-300"
                     >
                       <FaCheck className="mr-2" />
                       Mark Completed
@@ -284,11 +337,11 @@ const StationBookingsScreen = () => {
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 };
 

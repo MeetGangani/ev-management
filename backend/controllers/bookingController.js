@@ -3,6 +3,7 @@ import Booking from '../models/bookingModel.js';
 import EV from '../models/evModel.js';
 import Station from '../models/stationModel.js';
 import User from '../models/userModel.js';
+import mongoose from 'mongoose';
 
 // @desc    Create a new booking
 // @route   POST /api/bookings
@@ -80,10 +81,16 @@ const createBooking = asyncHandler(async (req, res) => {
   });
 
   if (booking) {
-    // Update EV status
+    // Update EV status to 'booked'
     ev.status = 'booked';
     ev.bookings.push(booking._id);
     await ev.save();
+    
+    // Update availableEVs count for start station
+    await Station.findByIdAndUpdate(
+      startStation._id,
+      { $inc: { availableEVs: -1 } }
+    );
 
     res.status(201).json(booking);
   } else {
@@ -98,7 +105,7 @@ const createBooking = asyncHandler(async (req, res) => {
 const getBookings = asyncHandler(async (req, res) => {
   const bookings = await Booking.find({})
     .populate('customerId', 'name email phone')
-    .populate('evId', 'model manufacturer imageUrl registrationNumber')
+    .populate('evId', 'model manufacturer imageUrl registrationNumber pricePerHour')
     .populate({
       path: 'startStationId',
       select: 'name address stationMasterId',
@@ -124,13 +131,41 @@ const getBookings = asyncHandler(async (req, res) => {
 // @route   GET /api/bookings/my
 // @access  Private
 const getMyBookings = asyncHandler(async (req, res) => {
-  const bookings = await Booking.find({ customerId: req.user._id })
-    .populate('evId', 'model manufacturer imageUrl')
-    .populate('startStationId', 'name address')
-    .populate('endStationId', 'name address')
-    .sort({ createdAt: -1 });
-  
-  res.json(bookings);
+  try {
+    const bookings = await Booking.find({ customerId: req.user._id })
+      .populate('evId', 'model manufacturer imageUrl registrationNumber pricePerHour')
+      .populate('customerId', 'name email')
+      .populate('startStationId', 'name address')
+      .populate('endStationId', 'name address')
+      .sort({ createdAt: -1 });
+    
+    // Map through bookings to ensure we handle any null references
+    const processedBookings = bookings.map(booking => {
+      const bookingObj = booking.toObject();
+      
+      // Handle missing station data
+      if (!bookingObj.startStationId) {
+        bookingObj.startStationId = { 
+          name: "Unknown Station", 
+          address: "No address available" 
+        };
+      }
+      
+      if (!bookingObj.endStationId) {
+        bookingObj.endStationId = { 
+          name: "Unknown Station", 
+          address: "No address available" 
+        };
+      }
+      
+      return bookingObj;
+    });
+    
+    res.json(processedBookings);
+  } catch (error) {
+    console.error('Error in getMyBookings:', error);
+    res.status(500).json({ message: 'Error retrieving bookings data' });
+  }
 });
 
 // @desc    Get booking by ID
@@ -139,7 +174,7 @@ const getMyBookings = asyncHandler(async (req, res) => {
 const getBookingById = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.id)
     .populate('customerId', 'name email phone')
-    .populate('evId', 'model manufacturer batteryLevel range imageUrl')
+    .populate('evId', 'model manufacturer batteryLevel range imageUrl pricePerHour registrationNumber')
     .populate('startStationId', 'name address operatingHours')
     .populate('endStationId', 'name address operatingHours');
 
@@ -165,6 +200,9 @@ const getBookingById = asyncHandler(async (req, res) => {
 // @route   PUT /api/bookings/:id/status
 // @access  Private/Admin/StationMaster/Customer
 const updateBookingStatus = asyncHandler(async (req, res) => {
+  console.log('Update booking status request body:', req.body);
+  console.log('User requesting status update:', req.user.role);
+  
   const booking = await Booking.findById(req.params.id)
     .populate('evId', 'status')
     .populate('customerId', 'name email');
@@ -183,12 +221,19 @@ const updateBookingStatus = asyncHandler(async (req, res) => {
 
   // Get the new status from request body
   const { status, damageReport, penaltyAmount, penaltyReason } = req.body;
+  
+  if (!status) {
+    res.status(400);
+    throw new Error('Status is required');
+  }
 
   // Validate status transition
   if (!['approved', 'declined', 'cancelled', 'ongoing', 'completed', 'penalized'].includes(status)) {
     res.status(400);
     throw new Error('Invalid status');
   }
+  
+  console.log(`Updating booking ${booking._id} from ${booking.status} to ${status}`);
 
   // Special validations based on user role and status transitions
   if (req.user.role === 'customer') {
@@ -198,6 +243,22 @@ const updateBookingStatus = asyncHandler(async (req, res) => {
         (booking.status === 'ongoing' && status !== 'completed')) {
       res.status(400);
       throw new Error('You are not authorized to change to this status');
+    }
+  }
+  
+  // Station masters should be able to mark rides as completed
+  if (req.user.role === 'stationMaster') {
+    // Allow station master to approve pending or complete ongoing bookings
+    const allowedTransitions = {
+      'pending': ['approved', 'declined', 'cancelled'],
+      'approved': ['completed', 'cancelled', 'ongoing'],
+      'ongoing': ['completed']
+    };
+    
+    if (allowedTransitions[booking.status] && 
+        !allowedTransitions[booking.status].includes(status)) {
+      res.status(400);
+      throw new Error(`Station master cannot change booking from ${booking.status} to ${status}`);
     }
   }
 
@@ -260,6 +321,12 @@ const updateBookingStatus = asyncHandler(async (req, res) => {
     if (ev) {
       ev.status = 'in-use';
       await ev.save();
+      
+      // Decrement availableEVs count at the start station
+      await Station.findByIdAndUpdate(
+        booking.startStationId,
+        { $inc: { availableEVs: -1 } }
+      );
     }
   }
 
@@ -281,7 +348,22 @@ const updateBookingStatus = asyncHandler(async (req, res) => {
     const ev = await EV.findById(booking.evId);
     if (ev) {
       ev.status = 'available';
+      
+      // Set currentStation to either the endStationId from the booking or the station
+      // that was already set on the EV, ensuring it's never null/undefined
+      ev.currentStation = booking.endStationId || ev.station || ev.currentStation;
+      
+      // Also update the station field for backward compatibility
+      ev.station = ev.currentStation;
+      
+      console.log(`Setting EV ${ev._id} current station to ${ev.currentStation}`);
       await ev.save();
+      
+      // Increment availableEVs count at the end station
+      await Station.findByIdAndUpdate(
+        booking.endStationId,
+        { $inc: { availableEVs: 1 } }
+      );
     }
   }
 
@@ -326,6 +408,12 @@ const cancelBooking = asyncHandler(async (req, res) => {
   if (ev) {
     ev.status = 'available';
     await ev.save();
+    
+    // Increment the availableEVs count at the start station
+    await Station.findByIdAndUpdate(
+      booking.startStationId,
+      { $inc: { availableEVs: 1 } }
+    );
   }
 
   const updatedBooking = await booking.save();
@@ -382,121 +470,107 @@ const reportDamage = asyncHandler(async (req, res) => {
 // @route   GET /api/bookings/penalty-stats
 // @access  Private/Admin
 const getPenaltyStatistics = asyncHandler(async (req, res) => {
-  if (req.user.role !== 'admin') {
-    res.status(401);
-    throw new Error('Not authorized to access penalty statistics');
+  console.log('Fetching penalty statistics...');
+  
+  const penaltyBookings = await Booking.find({
+    $or: [
+      { hasPenalty: true },
+      { penalty: { $exists: true } }
+    ]
+  })
+  .populate('customerId', 'name email')
+  .populate('evId', 'model manufacturer registrationNumber')
+  .select('customerId evId penalty penaltyAmount penaltyReason hasPenalty createdAt updatedAt');
+
+  console.log(`Found ${penaltyBookings.length} bookings with penalties`);
+  
+  // Handle case of no penalty bookings
+  if (penaltyBookings.length === 0) {
+    return res.json({
+      totalPenaltyCount: 0,
+      totalPenaltyAmount: 0,
+      customerPenalties: []
+    });
   }
 
-  // Get penalty statistics
-  const totalPenalizedBookings = await Booking.countDocuments({ hasPenalty: true });
-  const totalPenaltyAmount = await Booking.aggregate([
-    { $match: { hasPenalty: true } },
-    { $group: { _id: null, total: { $sum: "$penaltyAmount" } } }
-  ]);
-  
-  // Get penalty types breakdown
-  const lateReturnCount = await Booking.countDocuments({
-    penaltyReason: { $regex: /late return/i }
-  });
-  
-  const damageCount = await Booking.countDocuments({
-    damageReport: { $exists: true, $ne: "" }
-  });
-  
-  const otherPenaltyCount = totalPenalizedBookings - (lateReturnCount + damageCount);
+  // Calculate summary statistics
+  const totalPenaltyAmount = penaltyBookings.reduce((total, booking) => {
+    const amount = booking.penalty ? booking.penalty.amount : booking.penaltyAmount || 0;
+    return total + amount;
+  }, 0);
 
-  res.status(200).json({
-    totalPenalizedBookings,
-    totalPenaltyAmount: totalPenaltyAmount.length > 0 ? totalPenaltyAmount[0].total : 0,
-    penaltyBreakdown: {
-      lateReturn: lateReturnCount,
-      damage: damageCount,
-      other: otherPenaltyCount
+  // Group penalties by customer
+  const customerPenalties = {};
+  
+  penaltyBookings.forEach(booking => {
+    // Skip bookings with missing customer info
+    if (!booking.customerId) {
+      console.log('Skipping booking with missing customer:', booking._id);
+      return;
     }
+    
+    const customerId = booking.customerId._id.toString();
+    const customerName = booking.customerId.name || 'Unknown';
+    const customerEmail = booking.customerId.email || 'No email';
+    const amount = booking.penalty ? booking.penalty.amount : booking.penaltyAmount || 0;
+    
+    if (!customerPenalties[customerId]) {
+      customerPenalties[customerId] = {
+        customerId,
+        customerName,
+        customerEmail,
+        totalAmount: 0,
+        count: 0,
+        bookings: []
+      };
+    }
+    
+    customerPenalties[customerId].totalAmount += amount;
+    customerPenalties[customerId].count += 1;
+    customerPenalties[customerId].bookings.push({
+      bookingId: booking._id,
+      amount: amount,
+      reason: booking.penalty?.reason || booking.penaltyReason || 'Unknown reason',
+      date: booking.penalty?.timestamp || booking.updatedAt,
+      vehicle: `${booking.evId?.manufacturer || ''} ${booking.evId?.model || ''} (${booking.evId?.registrationNumber || 'Unknown'})`
+    });
+  });
+
+  res.json({
+    totalPenaltyCount: penaltyBookings.length,
+    totalPenaltyAmount,
+    customerPenalties: Object.values(customerPenalties)
   });
 });
 
-// @desc    Update booking location
+// @desc    Update booking location and penalty
 // @route   PUT /api/bookings/:id/location
-// @access  Private/Customer
+// @access  Private
 const updateBookingLocation = asyncHandler(async (req, res) => {
-  const booking = await Booking.findById(req.params.id)
-    .populate('customerId')
-    .populate('startStationId')
-    .populate('evId');
+  const booking = await Booking.findById(req.params.id);
 
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found');
   }
 
-  // Only the customer who owns the booking can update its location
-  if (req.user._id.toString() !== booking.customerId._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to update this booking');
-  }
-
-  // Only allow location updates for ongoing bookings
-  if (booking.status !== 'ongoing') {
-    res.status(400);
-    throw new Error('Location can only be updated for ongoing bookings');
-  }
-
-  const { location } = req.body;
-
-  if (!location || !location.latitude || !location.longitude) {
-    res.status(400);
-    throw new Error('Location data is required (latitude, longitude)');
-  }
-
-  // Create Point geometry
-  const point = {
-    type: 'Point',
-    coordinates: [parseFloat(location.longitude), parseFloat(location.latitude)],
-  };
-
-  // Add timestamp to the location
-  const locationWithTimestamp = {
-    ...point,
-    timestamp: new Date(),
-  };
-
-  // Update the booking's last known location
-  booking.lastKnownLocation = locationWithTimestamp;
-
-  // Check if within geofence (station radius)
-  const stationLng = booking.startStationId.location.coordinates[0];
-  const stationLat = booking.startStationId.location.coordinates[1];
-  const stationRadius = booking.startStationId.radius || 100; // default to 100m if not specified
-
-  // Calculate distance between current location and station
-  const distanceToStation = calculateDistance(
-    location.latitude,
-    location.longitude,
-    stationLat,
-    stationLng
-  );
-
-  // Determine if within geofence
-  const isWithinGeofence = distanceToStation <= stationRadius;
-
-  // If this is the first location update for an ongoing booking, set start location
-  if (booking.status === 'ongoing' && !booking.geofenceData?.startLocation) {
-    booking.geofenceData = {
-      ...booking.geofenceData,
-      startLocation: point,
+  // Update location if provided
+  if (req.body.location) {
+    booking.lastKnownLocation = {
+      type: 'Point',
+      coordinates: [req.body.location.longitude, req.body.location.latitude],
+      timestamp: new Date()
     };
+  }
+
+  // Update penalty if provided
+  if (req.body.penalty) {
+    booking.penalty = req.body.penalty;
   }
 
   const updatedBooking = await booking.save();
 
-  res.status(200).json({
-    bookingId: updatedBooking._id,
-    lastKnownLocation: updatedBooking.lastKnownLocation,
-    isWithinGeofence,
-    distance: distanceToStation,
-    stationRadius
-  });
+  res.json(updatedBooking);
 });
 
 // Helper function to calculate distance between two coordinates (Haversine formula)
@@ -517,6 +591,112 @@ function deg2rad(deg) {
   return deg * (Math.PI / 180);
 }
 
+// @desc    Complete a ride
+// @route   PUT /api/bookings/:id/complete
+// @access  Private
+const completeRide = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const booking = await Booking.findById(req.params.id)
+      .populate('evId')
+      .populate('startStationId')
+      .populate('endStationId');
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    if (booking.status === 'completed') {
+      throw new Error('Ride is already completed');
+    }
+
+    // Update booking status
+    booking.status = 'completed';
+    booking.endTime = new Date();
+    await booking.save({ session });
+
+    // Update EV status and location
+    await EV.findByIdAndUpdate(
+      booking.evId._id,
+      {
+        status: 'available',
+        station: booking.endStationId._id,
+        batteryLevel: req.body.batteryLevel || booking.evId.batteryLevel
+      },
+      { session }
+    );
+
+    // Remove EV from start station and decrease count
+    await Station.findByIdAndUpdate(
+      booking.startStationId._id,
+      {
+        $pull: { evs: booking.evId._id }
+      },
+      { session }
+    );
+
+    // Add EV to end station and increase count
+    await Station.findByIdAndUpdate(
+      booking.endStationId._id,
+      {
+        $addToSet: { evs: booking.evId._id },
+        $inc: { availableEVs: 1 }
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    // Return updated booking with populated fields
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('evId')
+      .populate('startStationId')
+      .populate('endStationId')
+      .populate('userId');
+
+    res.json(updatedBooking);
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+});
+
+// @desc    Add test penalty to a booking (for testing only)
+// @route   POST /api/bookings/:id/test-penalty
+// @access  Private/Admin (development only)
+const addTestPenalty = asyncHandler(async (req, res) => {
+  const booking = await Booking.findById(req.params.id)
+    .populate('evId', 'model manufacturer registrationNumber');
+
+  if (!booking) {
+    res.status(404);
+    throw new Error('Booking not found');
+  }
+
+  const { penaltyAmount, reason } = req.body;
+  const amount = penaltyAmount || 100;
+  const penaltyReason = reason || 'Test penalty for development purposes';
+
+  // Add penalty to booking (new format)
+  booking.penalty = {
+    amount: amount,
+    reason: penaltyReason,
+    timestamp: new Date().toISOString()
+  };
+  
+  // Also set legacy fields for compatibility
+  booking.hasPenalty = true;
+  booking.penaltyAmount = amount;
+  booking.penaltyReason = penaltyReason;
+
+  const updatedBooking = await booking.save();
+  res.json(updatedBooking);
+});
+
 export {
   createBooking,
   getBookings,
@@ -526,5 +706,7 @@ export {
   reportDamage,
   getPenaltyStatistics,
   updateBookingLocation,
-  cancelBooking
+  cancelBooking,
+  completeRide,
+  addTestPenalty,
 }; 

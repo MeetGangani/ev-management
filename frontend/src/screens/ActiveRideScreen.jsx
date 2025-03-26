@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { FaArrowLeft, FaMapMarkerAlt, FaClock, FaCarSide, FaCheck, FaCamera, FaTools } from 'react-icons/fa';
@@ -30,7 +30,10 @@ const ActiveRideScreen = () => {
   // Add cleanup effect when the component unmounts
   useEffect(() => {
     return () => {
-      console.log('ActiveRideScreen unmounting');
+      console.log('ActiveRideScreen unmounting - proper cleanup');
+      
+      // Don't try to clean up map instances here - it's now handled by the LiveLocationMap component
+      // This prevents the constant "Cleaning up map instance" messages
     };
   }, []);
   
@@ -118,6 +121,7 @@ const ActiveRideScreen = () => {
       }).unwrap();
       
       toast.success('Your ride has started!');
+      // Don't reset the map key - this causes map reinitialization
       refetch();
     } catch (err) {
       toast.error(err?.data?.message || 'Failed to start the ride');
@@ -273,7 +277,7 @@ const ActiveRideScreen = () => {
             ) : booking && (
               <ErrorBoundary onError={() => setMapError(true)}>
                 <LiveLocationMap 
-                  key={`ride-map-${mapKey}`}
+                  key={`ride-map-${bookingId}`}
                   bookingData={booking} 
                   stations={allStations || []}
                   height="100%"
@@ -332,6 +336,19 @@ const ActiveRideScreen = () => {
                     ? 'You can now end your ride safely. Thank you for parking correctly!' 
                     : 'Please return to the highlighted zone on the map to end your ride.'}
                 </p>
+              </div>
+            )}
+            
+            {/* Add this new section for tracking */}
+            {booking.status === 'ongoing' && (
+              <div className="mt-4 flex justify-center">
+                <Link 
+                  to={`/bookings/${booking._id}/track`}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 inline-flex items-center gap-2 text-lg"
+                >
+                  <FaMapMarkerAlt />
+                  Track Live Location
+                </Link>
               </div>
             )}
             

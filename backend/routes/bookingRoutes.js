@@ -9,6 +9,8 @@ import {
   getPenaltyStatistics,
   updateBookingLocation,
   cancelBooking,
+  completeRide,
+  addTestPenalty,
 } from '../controllers/bookingController.js';
 import { protect, admin, adminOrStationMaster, verifiedCustomer } from '../middleware/authMiddleware.js';
 
@@ -21,7 +23,11 @@ router.route('/')
 
 router.route('/my-bookings').get(protect, getMyBookings);
 
-router.route('/penalty-stats').get(protect, admin, getPenaltyStatistics);
+router.route('/penalty-stats')
+  .get(protect, admin, (req, res, next) => {
+    console.log('Accessing penalty-stats route with user role:', req.user.role);
+    getPenaltyStatistics(req, res, next);
+  });
 
 router.route('/:id')
   .get(protect, getBookingById);
@@ -35,5 +41,10 @@ router.route('/:id/cancel')
 router.route('/:id/damage-report').post(protect, adminOrStationMaster, reportDamage);
 
 router.route('/:id/location').put(protect, updateBookingLocation);
+
+router.put('/:id/complete', protect, completeRide);
+
+// Test route - available in all environments for testing
+router.route('/:id/test-penalty').post(protect, admin, addTestPenalty);
 
 export default router; 

@@ -116,15 +116,6 @@ const createStation = asyncHandler(async (req, res) => {
 // @route   PUT /api/stations/:id
 // @access  Private/Admin
 const updateStation = asyncHandler(async (req, res) => {
-  const {
-    name,
-    address,
-    operatingHours,
-    stationMasterId,
-    geofenceParameters,
-    status
-  } = req.body;
-
   const station = await Station.findById(req.params.id);
 
   if (!station) {
@@ -132,43 +123,61 @@ const updateStation = asyncHandler(async (req, res) => {
     throw new Error('Station not found');
   }
 
-  // Verify the station master if provided
-  if (stationMasterId && stationMasterId !== station.stationMasterId.toString()) {
-    const stationMaster = await User.findById(stationMasterId);
-    if (!stationMaster || stationMaster.role !== 'stationMaster') {
-      res.status(400);
-      throw new Error('Invalid station master');
+  try {
+    // Validate the incoming data
+    const {
+      name,
+      address,
+      operatingHours,
+      stationMasterId,
+      geofenceParameters
+    } = req.body;
+
+    // Verify the station master if provided
+    if (stationMasterId) {
+      const stationMaster = await User.findById(stationMasterId);
+      if (!stationMaster || stationMaster.role !== 'stationMaster') {
+        res.status(400);
+        throw new Error('Invalid station master');
+      }
     }
-  }
 
-  // Update station fields
-  station.name = name || station.name;
-  station.address = address || station.address;
-  
-  if (operatingHours) {
-    station.operatingHours = {
-      opening: operatingHours.opening || station.operatingHours.opening,
-      closing: operatingHours.closing || station.operatingHours.closing
-    };
-  }
-  
-  if (stationMasterId) {
-    station.stationMasterId = stationMasterId;
-  }
-  
-  if (geofenceParameters) {
-    station.geofenceParameters = {
-      coordinates: geofenceParameters.coordinates || station.geofenceParameters.coordinates,
-      radius: geofenceParameters.radius || station.geofenceParameters.radius
-    };
-  }
-  
-  if (status) {
-    station.status = status;
-  }
+    // Validate coordinates
+    if (geofenceParameters && geofenceParameters.coordinates) {
+      const [longitude, latitude] = geofenceParameters.coordinates;
+      if (
+        !Array.isArray(geofenceParameters.coordinates) ||
+        geofenceParameters.coordinates.length !== 2 ||
+        typeof longitude !== 'number' ||
+        typeof latitude !== 'number' ||
+        latitude < -90 || latitude > 90 ||
+        longitude < -180 || longitude > 180
+      ) {
+        res.status(400);
+        throw new Error('Invalid coordinates');
+      }
+    }
 
-  const updatedStation = await station.save();
-  res.json(updatedStation);
+    // Update the station
+    const updatedStation = await Station.findByIdAndUpdate(
+      req.params.id,
+      {
+        name,
+        address,
+        operatingHours,
+        stationMasterId,
+        geofenceParameters,
+        updatedAt: Date.now()
+      },
+      { new: true, runValidators: true }
+    );
+
+    res.json(updatedStation);
+  } catch (error) {
+    console.error('Station update error:', error);
+    res.status(400);
+    throw new Error(error.message || 'Failed to update station');
+  }
 });
 
 // @desc    Delete a station
@@ -192,11 +201,42 @@ const deleteStation = asyncHandler(async (req, res) => {
   res.json({ message: 'Station removed' });
 });
 
+// @desc    Get station availability
+// @route   GET /api/stations/:id/availability
+// @access  Public
+const getStationAvailability = asyncHandler(async (req, res) => {
+  const station = await Station.findById(req.params.id)
+    .populate({
+      path: 'evs',
+      select: 'status batteryLevel model manufacturer'
+    });
+
+  if (!station) {
+    res.status(404);
+    throw new Error('Station not found');
+  }
+
+  const availability = {
+    totalEVs: station.evs.length,
+    availableEVs: station.evs.filter(ev => ev.status === 'available').length,
+    evs: station.evs.map(ev => ({
+      id: ev._id,
+      model: ev.model,
+      manufacturer: ev.manufacturer,
+      status: ev.status,
+      batteryLevel: ev.batteryLevel
+    }))
+  };
+
+  res.json(availability);
+});
+
 export {
   getStations,
   getStationById,
   getNearestStations,
   createStation,
   updateStation,
-  deleteStation
+  deleteStation,
+  getStationAvailability
 }; 

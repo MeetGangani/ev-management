@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 // import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { motion } from 'framer-motion';
+import { FaUser, FaEnvelope, FaPhone, FaIdCard, FaLock, FaCheckCircle, FaBuilding } from 'react-icons/fa';
 import FormContainer from '../components/FormContainer';
 import { toast } from 'react-toastify';
 import Loader from '../components/Loader';
@@ -69,147 +71,188 @@ const ProfileScreen = () => {
   
   return (
     <FormContainer>
-      <h1 className="text-2xl font-bold mb-6 text-center">Update Profile</h1>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <h1 className="text-2xl font-bold mb-6 text-center gradient-text">Update Profile</h1>
 
-      <form onSubmit={submitHandler}>
-        <div className="mb-4">
-          <label htmlFor="name" className="block text-gray-700 font-medium mb-2">
-            Name
-          </label>
-          <input
-            type="text"
-            id="name"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        
-        <div className="mb-4">
-          <label htmlFor="email" className="block text-gray-700 font-medium mb-2">
-            Email Address
-          </label>
-          <input
-            type="email"
-            id="email"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-
-        <div className="mb-4">
-          <label htmlFor="phone" className="block text-gray-700 font-medium mb-2">
-            Phone Number
-          </label>
-          <input
-            type="tel"
-            id="phone"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter phone number"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
-        
-        <div className="mb-4">
-          <label htmlFor="password" className="block text-gray-700 font-medium mb-2">
-            Password
-          </label>
-          <input
-            type="password"
-            id="password"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-
-        <div className="mb-4">
-          <label htmlFor="confirmPassword" className="block text-gray-700 font-medium mb-2">
-            Confirm Password
-          </label>
-          <input
-            type="password"
-            id="confirmPassword"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Confirm password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-        </div>
-
-        <button 
-          type="submit" 
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md mt-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          disabled={isUpdateLoading}
+        <motion.form 
+          onSubmit={submitHandler}
+          className="card-glass border border-primary-600/20 shadow-glass p-6 mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
         >
-          Update Profile
-        </button>
-
-        {isUpdateLoading && <div className="mt-4"><Loader /></div>}
-      </form>
-
-      {userInfo.role === 'customer' && (
-        <div className="mt-8 border-t pt-6">
-          <h2 className="text-xl font-bold mb-4">Aadhar Verification</h2>
+          <div className="mb-4">
+            <label htmlFor="name" className="block text-white font-medium mb-2 flex items-center gap-2">
+              <FaUser className="text-accent-blue" /> Name
+            </label>
+            <input
+              type="text"
+              id="name"
+              className="w-full px-4 py-3 bg-primary-800/50 border border-primary-600/30 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-blue text-white placeholder-white/50"
+              placeholder="Enter name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
           
-          {userInfo.aadharVerified ? (
-            <div className="bg-green-100 p-4 rounded-md mb-4">
-              <p className="text-green-800">
-                ✓ Your Aadhar is verified
+          <div className="mb-4">
+            <label htmlFor="email" className="block text-white font-medium mb-2 flex items-center gap-2">
+              <FaEnvelope className="text-accent-teal" /> Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              className="w-full px-4 py-3 bg-primary-800/50 border border-primary-600/30 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-teal text-white placeholder-white/50"
+              placeholder="Enter email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="phone" className="block text-white font-medium mb-2 flex items-center gap-2">
+              <FaPhone className="text-accent-purple" /> Phone Number
+            </label>
+            <input
+              type="tel"
+              id="phone"
+              className="w-full px-4 py-3 bg-primary-800/50 border border-primary-600/30 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-purple text-white placeholder-white/50"
+              placeholder="Enter phone number"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+          
+          <div className="mb-4">
+            <label htmlFor="password" className="block text-white font-medium mb-2 flex items-center gap-2">
+              <FaLock className="text-accent-red" /> Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              className="w-full px-4 py-3 bg-primary-800/50 border border-primary-600/30 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-red text-white placeholder-white/50"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="confirmPassword" className="block text-white font-medium mb-2 flex items-center gap-2">
+              <FaLock className="text-accent-red" /> Confirm Password
+            </label>
+            <input
+              type="password"
+              id="confirmPassword"
+              className="w-full px-4 py-3 bg-primary-800/50 border border-primary-600/30 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-red text-white placeholder-white/50"
+              placeholder="Confirm password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+
+          <motion.button 
+            type="submit" 
+            className="w-full bg-gradient-to-r from-accent-blue to-accent-blue/80 hover:shadow-glow-blue text-white font-medium py-3 px-4 rounded-md mt-4 focus:outline-none focus:ring-2 focus:ring-accent-blue disabled:opacity-50 transition-all duration-300"
+            disabled={isUpdateLoading}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Update Profile
+          </motion.button>
+
+          {isUpdateLoading && <div className="mt-4"><Loader /></div>}
+        </motion.form>
+
+        {userInfo.role === 'customer' && (
+          <motion.div 
+            className="mt-8 border-t border-primary-600/30 pt-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <h2 className="text-xl font-bold mb-4 gradient-text flex items-center gap-2">
+              <FaIdCard /> Aadhar Verification
+            </h2>
+            
+            {userInfo.aadharVerified ? (
+              <div className="card-glass border border-green-500/30 p-6 rounded-md mb-4 backdrop-blur-sm">
+                <p className="text-green-400 flex items-center gap-2">
+                  <FaCheckCircle className="text-xl" /> Your Aadhar is verified
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={verifyAadharHandler} className="card-glass border border-primary-600/20 shadow-glass p-6">
+                <div className="mb-4">
+                  <label htmlFor="aadhaar" className="block text-white font-medium mb-2 flex items-center gap-2">
+                    <FaIdCard className="text-accent-yellow" /> Aadhar Number
+                  </label>
+                  <input
+                    type="text"
+                    id="aadhaar"
+                    className="w-full px-4 py-3 bg-primary-800/50 border border-primary-600/30 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-yellow text-white placeholder-white/50"
+                    placeholder="Enter your 12-digit Aadhar number"
+                    value={aadhaar}
+                    onChange={(e) => setAadhaar(e.target.value)}
+                    disabled={userInfo.aadharVerified}
+                    maxLength={12}
+                  />
+                </div>
+                <motion.button 
+                  type="submit" 
+                  className="w-full bg-gradient-to-r from-accent-yellow to-accent-yellow/80 hover:shadow-glow-yellow text-white font-medium py-3 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-yellow disabled:opacity-50 transition-all duration-300"
+                  disabled={isVerifyLoading}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Verify Aadhar
+                </motion.button>
+                {isVerifyLoading && <div className="mt-4"><Loader /></div>}
+              </form>
+            )}
+          </motion.div>
+        )}
+
+        {userInfo.role === 'stationMaster' && (
+          <motion.div 
+            className="mt-8 border-t border-primary-600/30 pt-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <h2 className="text-xl font-bold mb-4 gradient-text flex items-center gap-2">
+              <FaBuilding /> Station Master Info
+            </h2>
+            <div className="card-glass border border-primary-600/20 shadow-glass p-6">
+              <p className="text-white/80">
+                You are registered as a Station Master. Please check with admin to get assigned to a station.
               </p>
             </div>
-          ) : (
-            <form onSubmit={verifyAadharHandler}>
-              <div className="mb-4">
-                <label htmlFor="aadhaar" className="block text-gray-700 font-medium mb-2">
-                  Aadhar Number
-                </label>
-                <input
-                  type="text"
-                  id="aadhaar"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter your 12-digit Aadhar number"
-                  value={aadhaar}
-                  onChange={(e) => setAadhaar(e.target.value)}
-                  disabled={userInfo.aadharVerified}
-                  maxLength={12}
-                />
-              </div>
-              <button 
-                type="submit" 
-                className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 disabled:opacity-50"
-                disabled={isVerifyLoading}
-              >
-                Verify Aadhar
-              </button>
-              {isVerifyLoading && <div className="mt-4"><Loader /></div>}
-            </form>
-          )}
-        </div>
-      )}
+          </motion.div>
+        )}
 
-      {userInfo.role === 'stationMaster' && (
-        <div className="mt-8 border-t pt-6">
-          <h2 className="text-xl font-bold mb-4">Station Master Info</h2>
-          <p className="text-gray-700">
-            You are registered as a Station Master. Please check with admin to get assigned to a station.
-          </p>
-        </div>
-      )}
-
-      {userInfo.role === 'admin' && (
-        <div className="mt-8 border-t pt-6">
-          <h2 className="text-xl font-bold mb-4">Admin Dashboard</h2>
-          <p className="text-gray-700">
-            You have admin privileges. You can manage users, stations, and EVs.
-          </p>
-        </div>
-      )}
+        {userInfo.role === 'admin' && (
+          <motion.div 
+            className="mt-8 border-t border-primary-600/30 pt-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <h2 className="text-xl font-bold mb-4 gradient-text flex items-center gap-2">
+              <FaUser /> Admin Dashboard
+            </h2>
+            <div className="card-glass border border-primary-600/20 shadow-glass p-6">
+              <p className="text-white/80">
+                You have admin privileges. You can manage users, stations, and EVs.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
     </FormContainer>
   );
 };

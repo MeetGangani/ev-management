@@ -15,6 +15,7 @@ const RegisterScreen = () => {
   const [role, setRole] = useState('customer');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -29,8 +30,43 @@ const RegisterScreen = () => {
     }
   }, [navigate, userInfo]);
 
+  // Password validation function
+  const validatePassword = (password) => {
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters long';
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!/[a-z]/.test(password)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+    if (!/[0-9]/.test(password)) {
+      return 'Password must contain at least one number';
+    }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      return 'Password must contain at least one special character';
+    }
+    return '';
+  };
+
+  // Handle password change
+  const handlePasswordChange = (e) => {
+    const newPassword = e.target.value;
+    setPassword(newPassword);
+    setPasswordError(validatePassword(newPassword));
+  };
+
   const submitHandler = async (e) => {
     e.preventDefault();
+
+    // Validate password again before submission
+    const passwordValidationError = validatePassword(password);
+    if (passwordValidationError) {
+      setPasswordError(passwordValidationError);
+      toast.error(passwordValidationError);
+      return;
+    }
 
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
@@ -139,12 +175,19 @@ const RegisterScreen = () => {
           <input
             type="password"
             id="password"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full px-3 py-2 border ${passwordError ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
             placeholder="Enter password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={handlePasswordChange}
             required
           />
+          {passwordError && (
+            <p className="text-red-500 text-sm mt-1">{passwordError}</p>
+          )}
+          <div className="mt-1 text-xs text-gray-500">
+            Password must contain at least 8 characters, include an uppercase letter, 
+            lowercase letter, number, and special character.
+          </div>
         </div>
         
         <div className="mb-4">
@@ -154,18 +197,21 @@ const RegisterScreen = () => {
           <input
             type="password"
             id="confirmPassword"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full px-3 py-2 border ${password !== confirmPassword && confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500`}
             placeholder="Confirm password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
           />
+          {password !== confirmPassword && confirmPassword && (
+            <p className="text-red-500 text-sm mt-1">Passwords do not match</p>
+          )}
         </div>
 
         <button 
           type="submit" 
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md mt-4 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          disabled={isLoading}
+          disabled={isLoading || passwordError || (password !== confirmPassword && confirmPassword)}
         >
           Register
         </button>

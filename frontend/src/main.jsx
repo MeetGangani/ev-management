@@ -32,6 +32,8 @@ import StationMasterRoute from './components/StationMasterRoute.jsx';
 import VerifiedCustomerRoute from './components/VerifiedCustomerRoute.jsx';
 import EditStationScreen from './screens/EditStationScreen.jsx';
 import PenaltyDashboardScreen from './screens/PenaltyDashboardScreen.jsx';
+import LiveTrackingScreen from './screens/LiveTrackingScreen';
+import PenaltyReceipt from './components/PenaltyReceipt';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -67,6 +69,9 @@ const router = createBrowserRouter(
           <Route index element={<StationMasterDashboardScreen />} />
           <Route path='bookings' element={<StationBookingsScreen />} />
         </Route>
+
+        <Route path='/bookings/:bookingId/track' element={<LiveTrackingScreen />} />
+        <Route path='/bookings/:bookingId/penalty-receipt' element={<PenaltyReceipt />} />
       </Route>
     </Route>
   )

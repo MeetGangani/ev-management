@@ -98,6 +98,11 @@ const evSchema = mongoose.Schema(
         },
       },
     ],
+    currentStation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Station',
+      required: true,
+    },
   },
   {
     timestamps: true,

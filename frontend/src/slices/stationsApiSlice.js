@@ -54,18 +54,12 @@ export const stationsApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ['Station'],
     }),
     updateStation: builder.mutation({
-      query: ({ stationId, data }) => {
-        const url = `${STATIONS_URL}/${stationId}`;
-        logApiCall('updateStation', url, 'PUT', data);
-        return {
-          url,
-          method: 'PUT',
-          body: data,
-        };
-      },
-      // Invalidate specific station and all stations
-      invalidatesTags: (result, error, { stationId }) => 
-        error ? [] : [{ type: 'Station', id: stationId }, 'Station'],
+      query: ({ stationId, data }) => ({
+        url: `/stations/${stationId}`,
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['Station'],
     }),
     deleteStation: builder.mutation({
       query: (stationId) => ({
