@@ -244,6 +244,7 @@ body {
 #live-tracking-map {
   z-index: 1;
 }
+<<<<<<< HEAD
 
 /* Modern scrollbar */
 ::-webkit-scrollbar {
@@ -264,3 +265,5 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary-300);
 }
+=======
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d

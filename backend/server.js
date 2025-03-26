@@ -13,6 +13,7 @@ import mongoose from 'mongoose';
 
 const port = process.env.PORT || 5000;
 
+<<<<<<< HEAD
 // Connect to MongoDB
 const startServer = async () => {
   try {
@@ -131,5 +132,43 @@ const startServer = async () => {
     console.error('Failed to start server:', error);
   }
 };
+=======
+connectDB();
+
+const app = express();
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use(cookieParser());
+
+// Middleware to handle API prefix issues
+app.use((req, res, next) => {
+  // Log all API requests
+  if (req.url.includes('/api') || req.url.includes('lapi')) {
+    console.log(`Original request URL: ${req.url}`);
+  }
+  
+  // Fix double /api prefix
+  if (req.url.startsWith('/api/api/')) {
+    req.url = req.url.replace('/api/api/', '/api/');
+    console.log(`Fixed double API prefix. New URL: ${req.url}`);
+  }
+  
+  // Fix missing leading slash
+  if (req.url.startsWith('api/')) {
+    req.url = `/${req.url}`;
+    console.log(`Added leading slash. New URL: ${req.url}`);
+  }
+  
+  // Fix 'lapi' typo
+  if (req.url.includes('lapi/')) {
+    req.url = req.url.replace('lapi/', '/api/');
+    console.log(`Fixed 'lapi' typo. New URL: ${req.url}`);
+  }
+  
+  next();
+});
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
 
 startServer();

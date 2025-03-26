@@ -3,10 +3,14 @@ import { Outlet } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Header from './components/Header';
+<<<<<<< HEAD
 import Footer from './components/Footer';
 import { NotificationProvider } from './components/NotificationSystem';
 import ThemeSwitcher from './components/ThemeSwitcher';
 import PageTransition from './components/PageTransition';
+=======
+import LiveTrackingScreen from './screens/LiveTrackingScreen';
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
 
 const App = () => {
   return (

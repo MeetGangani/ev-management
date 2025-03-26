@@ -230,11 +230,16 @@ const MyBookingsScreen = () => {
                           </div>
                         )}
                         <div>
+<<<<<<< HEAD
                           <div className="text-sm font-medium text-white">
                             {booking.evId?.manufacturer} {booking.evId?.model}
                           </div>
                           <div className="text-xs text-white/60">
                             {booking.evId?.registrationNumber}
+=======
+                          <div className="text-sm font-medium text-gray-900">
+                            {booking.evId?.manufacturer} {booking.evId?.model}
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
                           </div>
                         </div>
                       </div>
@@ -272,7 +277,11 @@ const MyBookingsScreen = () => {
                         {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                       </span>
                       {(booking.penalty || booking.hasPenalty) && (
+<<<<<<< HEAD
                         <span className="ml-2 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+=======
+                        <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
                           Penalty
                         </span>
                       )}
@@ -300,12 +309,20 @@ const MyBookingsScreen = () => {
                           {(booking.penalty || booking.hasPenalty) ? (
                             <Link 
                               to={`/bookings/${booking._id}/penalty-receipt`}
+<<<<<<< HEAD
                               className="bg-gradient-to-r from-accent-red to-accent-red/80 hover:shadow-glow-red text-white text-sm px-3 py-1.5 rounded-lg inline-flex items-center transition-all duration-300"
+=======
+                              className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-md inline-flex items-center"
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
                             >
                               View Receipt
                             </Link>
                           ) : (
+<<<<<<< HEAD
                             <span className="text-xs text-white/60">
+=======
+                            <span className="text-xs text-gray-500">
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
                               {booking.status === 'completed' ? 'Completed' : 
                                booking.status === 'cancelled' ? 'Cancelled' : 
                                'Awaiting approval'}

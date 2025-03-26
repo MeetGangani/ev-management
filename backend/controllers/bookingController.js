@@ -131,6 +131,7 @@ const getBookings = asyncHandler(async (req, res) => {
 // @route   GET /api/bookings/my
 // @access  Private
 const getMyBookings = asyncHandler(async (req, res) => {
+<<<<<<< HEAD
   try {
     const bookings = await Booking.find({ customerId: req.user._id })
       .populate('evId', 'model manufacturer imageUrl registrationNumber pricePerHour')
@@ -166,6 +167,16 @@ const getMyBookings = asyncHandler(async (req, res) => {
     console.error('Error in getMyBookings:', error);
     res.status(500).json({ message: 'Error retrieving bookings data' });
   }
+=======
+  const bookings = await Booking.find({ customerId: req.user._id })
+    .populate('evId', 'model manufacturer imageUrl registrationNumber')
+    .populate('customerId', 'name email')
+    .populate('startStationId', 'name address')
+    .populate('endStationId', 'name address')
+    .sort({ createdAt: -1 });
+  
+  res.json(bookings);
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
 });
 
 // @desc    Get booking by ID
@@ -470,8 +481,11 @@ const reportDamage = asyncHandler(async (req, res) => {
 // @route   GET /api/bookings/penalty-stats
 // @access  Private/Admin
 const getPenaltyStatistics = asyncHandler(async (req, res) => {
+<<<<<<< HEAD
   console.log('Fetching penalty statistics...');
   
+=======
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
   const penaltyBookings = await Booking.find({
     $or: [
       { hasPenalty: true },
@@ -481,6 +495,7 @@ const getPenaltyStatistics = asyncHandler(async (req, res) => {
   .populate('customerId', 'name email')
   .populate('evId', 'model manufacturer registrationNumber')
   .select('customerId evId penalty penaltyAmount penaltyReason hasPenalty createdAt updatedAt');
+<<<<<<< HEAD
 
   console.log(`Found ${penaltyBookings.length} bookings with penalties`);
   
@@ -492,6 +507,8 @@ const getPenaltyStatistics = asyncHandler(async (req, res) => {
       customerPenalties: []
     });
   }
+=======
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
 
   // Calculate summary statistics
   const totalPenaltyAmount = penaltyBookings.reduce((total, booking) => {
@@ -503,6 +520,7 @@ const getPenaltyStatistics = asyncHandler(async (req, res) => {
   const customerPenalties = {};
   
   penaltyBookings.forEach(booking => {
+<<<<<<< HEAD
     // Skip bookings with missing customer info
     if (!booking.customerId) {
       console.log('Skipping booking with missing customer:', booking._id);
@@ -525,6 +543,24 @@ const getPenaltyStatistics = asyncHandler(async (req, res) => {
       };
     }
     
+=======
+    const customerId = booking.customerId?._id?.toString() || 'unknown';
+    const customerName = booking.customerId?.name || 'Unknown';
+    const customerEmail = booking.customerId?.email || 'No email';
+    const amount = booking.penalty ? booking.penalty.amount : booking.penaltyAmount || 0;
+    
+    if (!customerPenalties[customerId]) {
+      customerPenalties[customerId] = {
+        customerId,
+        customerName,
+        customerEmail,
+        totalAmount: 0,
+        count: 0,
+        bookings: []
+      };
+    }
+    
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
     customerPenalties[customerId].totalAmount += amount;
     customerPenalties[customerId].count += 1;
     customerPenalties[customerId].bookings.push({

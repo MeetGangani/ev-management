@@ -54,6 +54,7 @@ export const bookingsApiSlice = apiSlice.injectEndpoints({
       query: () => ({
         url: `${BOOKINGS_URL}/penalty-stats`,
       }),
+<<<<<<< HEAD
       transformResponse: (response) => {
         console.log('Transformed penalty stats:', response);
         
@@ -66,6 +67,8 @@ export const bookingsApiSlice = apiSlice.injectEndpoints({
         
         return transformedResponse;
       },
+=======
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
       keepUnusedDataFor: 5,
       providesTags: ['Booking'],
     }),

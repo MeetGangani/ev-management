@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { Link } from 'react-router-dom';
 import { FaClock, FaMapMarkerAlt, FaChargingStation, FaCar } from 'react-icons/fa';
 import { motion } from 'framer-motion';
@@ -88,3 +89,20 @@ const StationCard = ({ station }) => {
 };
 
 export default StationCard; 
+=======
+const StationCard = ({ station }) => {
+  return (
+    <div className="border rounded-lg p-4 shadow-sm">
+      <h3 className="text-lg font-semibold">{station.name}</h3>
+      <p className="text-gray-600">{station.address}</p>
+      <div className="mt-2">
+        <span className="font-medium">Available EVs: </span>
+        <span className={`${station.availableEVs > 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {station.availableEVs}
+        </span>
+      </div>
+      {/* ... other station details ... */}
+    </div>
+  );
+}; 
+>>>>>>> 346e70c09998fca2573e110616823bdfca03111d
